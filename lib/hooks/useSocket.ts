@@ -7,7 +7,7 @@ import { Square } from 'chess.js';
 interface UseSocketReturn {
   socket: Socket | null;
   isConnected: boolean;
-  gameState: GameState | null;
+  gameState: (GameState & { board: (any[] | null)[] }) | null;
   playerId: string;
   isSpectator: boolean;
   possibleMoves: { [square: string]: string[] };
@@ -18,20 +18,20 @@ interface UseSocketReturn {
   switchSides: () => void;
   startGame: () => void;
   setGameSettings: (settings: GameSettings) => void;
-  makeMove: (from: Square, to: Square) => void;
+  makeMove: (from: Square, to: Square, promotion?: string) => void;
   requestPossibleMoves: () => void;
 }
 
 export function useSocket(): UseSocketReturn {
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [gameState, setGameState] = useState<(GameState & { board: (any[] | null)[] }) | null>(null);
   const [playerId, setPlayerId] = useState<string>('');
-  const [isSpectator, setIsSpectator] = useState(false);
+  const [isSpectator, setIsSpectator] = useState<boolean>(false);
   const [possibleMoves, setPossibleMoves] = useState<{ [square: string]: string[] }>({});
   const [pieceCooldowns, setPieceCooldowns] = useState<PieceCooldown[]>([]);
-  const [movesLeft, setMovesLeft] = useState(0);
-  const prevGameStateRef = useRef<GameState | null>(null);
+  const [movesLeft, setMovesLeft] = useState<number>(0);
+  const prevGameStateRef = useRef<(GameState & { board: (any[] | null)[] }) | null>(null);
   const hasShownConnectedToast = useRef(false);
   const [lastSettingsUpdate, setLastSettingsUpdate] = useState<{
     settings: GameSettings;
@@ -40,8 +40,36 @@ export function useSocket(): UseSocketReturn {
   } | null>(null);
 
   useEffect(() => {
-    // Initialize socket connection
-    const newSocket = io();
+    // Determine connection URL based on environment
+    let serverUrl: string | undefined;
+    
+    if (typeof window !== 'undefined') {
+      // Check for environment-specific Socket.IO server URL
+      const socketIOUrl = process.env.NEXT_PUBLIC_SOCKETIO_URL;
+      
+      if (socketIOUrl) {
+        // Use explicitly configured Socket.IO server
+        serverUrl = socketIOUrl;
+        console.log('Using configured Socket.IO server:', serverUrl);
+      } else if (window.location.hostname.includes('cloudfront.net')) {
+        // Production: Try connecting to a Socket.IO server on the same domain
+        // This requires deploying the Socket.IO server to the same domain
+        serverUrl = window.location.origin;
+        console.log('Production detected, connecting to same origin:', serverUrl);
+      } else {
+        // Development: Use default (localhost)
+        serverUrl = undefined;
+        console.log('Development detected, using default connection');
+      }
+    }
+    
+    // Create Socket.IO connection
+    const newSocket = serverUrl ? io(serverUrl, {
+      transports: ['websocket', 'polling'],
+      timeout: 10000,
+      forceNew: true
+    }) : io();
+    
     setSocket(newSocket);
 
     // Connection events
@@ -64,10 +92,16 @@ export function useSocket(): UseSocketReturn {
     });
 
     // Game events
-    newSocket.on('game-joined', (data) => {
+    newSocket.on('game-joined', (data: {
+      success: boolean;
+      gameState?: GameState & { board: (any[] | null)[] };
+      playerId?: string;
+      isSpectator?: boolean;
+      message?: string;
+    }) => {
       if (data.success) {
-        setGameState(data.gameState);
-        setPlayerId(data.playerId);
+        setGameState(data.gameState!);
+        setPlayerId(data.playerId!);
         setIsSpectator(data.isSpectator || false);
         toast.dismiss();
         
@@ -82,7 +116,7 @@ export function useSocket(): UseSocketReturn {
       }
     });
 
-    newSocket.on('game-updated', (updatedGameState: GameState) => {
+    newSocket.on('game-updated', (updatedGameState: GameState & { board: (any[] | null)[] }) => {
       const prevState = prevGameStateRef.current;
       prevGameStateRef.current = updatedGameState;
       setGameState(updatedGameState);
@@ -112,7 +146,7 @@ export function useSocket(): UseSocketReturn {
       }
     });
 
-    newSocket.on('game-started', (startedGameState: GameState) => {
+    newSocket.on('game-started', (startedGameState: GameState & { board: (any[] | null)[] }) => {
       prevGameStateRef.current = startedGameState;
       setGameState(startedGameState);
       toast.success('Game started! Good luck!');
@@ -122,7 +156,7 @@ export function useSocket(): UseSocketReturn {
       toast.warning(`${data.playerName} left the game`);
     });
 
-    newSocket.on('sides-switched', (updatedGameState: GameState) => {
+    newSocket.on('sides-switched', (updatedGameState: GameState & { board: (any[] | null)[] }) => {
       prevGameStateRef.current = updatedGameState;
       setGameState(updatedGameState);
       toast.info('Sides switched');
@@ -230,9 +264,9 @@ export function useSocket(): UseSocketReturn {
     }
   }, [socket, isSpectator]);
 
-  const makeMove = useCallback((from: Square, to: Square) => {
+  const makeMove = useCallback((from: Square, to: Square, promotion?: string) => {
     if (socket && !isSpectator) {
-      socket.emit('make-move', { from, to });
+      socket.emit('make-move', { from, to, promotion });
     } else if (isSpectator) {
       toast.error('Spectators cannot make moves');
     }

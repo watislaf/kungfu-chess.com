@@ -5,9 +5,10 @@ import { GameState, PieceCooldown } from "@/app/models/Game";
 import { PlayerList } from "./PlayerList";
 import { ChessBoard } from "./ChessBoard";
 import { ConnectionStatus } from "./ConnectionStatus";
+import { EndGame } from "./EndGame";
 
 interface GameStartedProps {
-  gameState: GameState;
+  gameState: GameState & { board: (any[] | null)[] };
   playerId: string;
   gameId: string;
   isConnected: boolean;
@@ -15,8 +16,9 @@ interface GameStartedProps {
   possibleMoves: { [square: string]: string[] };
   pieceCooldowns: PieceCooldown[];
   movesLeft: number;
-  onMove: (from: string, to: string) => void;
+  onMove: (from: string, to: string, promotion?: string) => void;
   onRequestPossibleMoves: () => void;
+  onNewGame: () => void;
 }
 
 export function GameStarted({
@@ -30,6 +32,7 @@ export function GameStarted({
   movesLeft,
   onMove,
   onRequestPossibleMoves,
+  onNewGame,
 }: GameStartedProps) {
   const currentPlayer = gameState.players.find((p) => p.id === playerId);
 
@@ -79,6 +82,15 @@ export function GameStarted({
           />
         </div>
       </div>
+      
+      {/* End Game Modal */}
+      {gameState.status === 'finished' && (
+        <EndGame
+          gameState={gameState}
+          playerId={playerId}
+          onNewGame={onNewGame}
+        />
+      )}
     </div>
   );
 }

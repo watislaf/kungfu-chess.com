@@ -47,6 +47,18 @@ export interface GameState {
   playerMoveHistory: PlayerMoveHistory[];
   winner?: string;
   gameEndReason?: 'checkmate' | 'stalemate' | 'draw' | 'resignation' | 'king-captured';
+  // New chess features
+  castlingRights: {
+    whiteKingSide: boolean;
+    whiteQueenSide: boolean;
+    blackKingSide: boolean;
+    blackQueenSide: boolean;
+  };
+  pendingPromotion?: {
+    playerId: string;
+    from: Square;
+    to: Square;
+  };
 }
 
 // Piece type
@@ -113,6 +125,12 @@ export class Game {
       moveHistory: [],
       pieceCooldowns: [],
       playerMoveHistory: [],
+      castlingRights: {
+        whiteKingSide: true,
+        whiteQueenSide: true,
+        blackKingSide: true,
+        blackQueenSide: true,
+      },
     };
     this.board = createInitialBoard();
     this.state.fen = undefined; // Not used
@@ -250,6 +268,7 @@ export class Game {
     success: boolean; 
     message?: string; 
     move?: { from: Square, to: Square, piece: Piece, captured?: Piece };
+    needsPromotion?: boolean;
   } {
     if (this.state.status !== 'playing' || !this.state.settings) {
       return { success: false, message: 'Game is not in playing state' };
@@ -289,14 +308,113 @@ export class Game {
     const pieceColor = piece.color === 'w' ? 'white' : 'black';
     if (pieceColor !== player.side) return { success: false, message: 'Cannot move opponent\'s piece' };
     // Validate move for piece type
-    if (!isLegalMove(piece, fromRow, fromCol, toRow, toCol, this.board, player.side)) {
+    if (!isLegalMove(piece, fromRow, fromCol, toRow, toCol, this.board, player.side, this.state.castlingRights, this.state.moveHistory)) {
       return { success: false, message: 'Invalid move' };
     }
-    // Capture
+    
+    // Capture - check this BEFORE pawn promotion
     const captured: Piece | undefined = this.board[toRow][toCol] || undefined;
+    
+    // Handle en passant capture
+    let enPassantCapture: Piece | undefined = undefined;
+    if (piece.type === 'p' && !captured && Math.abs(toCol - fromCol) === 1) {
+      // This might be an en passant capture
+      const lastMove = this.state.moveHistory[this.state.moveHistory.length - 1];
+      if (lastMove && lastMove.piece.type === 'p' && 
+          lastMove.piece.color !== piece.color &&
+          Math.abs(squareToCoords(lastMove.to)[0] - squareToCoords(lastMove.from)[0]) === 2) {
+        const [lastToRow, lastToCol] = squareToCoords(lastMove.to);
+        if (lastToRow === fromRow && lastToCol === toCol) {
+          // En passant capture confirmed
+          enPassantCapture = this.board[lastToRow][lastToCol] || undefined;
+          this.board[lastToRow][lastToCol] = null; // Remove the captured pawn
+        }
+      }
+    }
+    
+    // Use enPassantCapture as the captured piece if it exists
+    const actualCaptured = captured || enPassantCapture;
+    
+    // If capturing a king, end the game immediately (no promotion)
+    if (actualCaptured && actualCaptured.type === 'k') {
+      // Move piece immediately
+      this.board[toRow][toCol] = piece;
+      this.board[fromRow][fromCol] = null;
+      
+      // Add to move history
+      this.state.moveHistory.push({ from, to, piece, captured: actualCaptured });
+      this.state.playerMoveHistory.push({ playerId, timestamp: now });
+      
+      // End the game
+      this.state.status = 'finished';
+      this.state.winner = playerId;
+      this.state.gameEndReason = 'king-captured';
+      
+      return { success: true, move: { from, to, piece, captured: actualCaptured } };
+    }
+    
+    // Check for pawn promotion (only if not capturing king)
+    if (piece.type === 'p') {
+      const promotionRow = piece.color === 'w' ? 0 : 7;
+      if (toRow === promotionRow) {
+        if (!promotion) {
+          // Set pending promotion
+          this.state.pendingPromotion = {
+            playerId,
+            from,
+            to
+          };
+          return { success: true, needsPromotion: true };
+        } else {
+          // Complete promotion immediately
+          const promotedPiece: Piece = {
+            type: promotion as 'q' | 'r' | 'b' | 'n',
+            color: piece.color
+          };
+          piece.type = promotedPiece.type;
+        }
+      }
+    }
+    
+    // Handle castling - move rook too
+    if (piece.type === 'k' && Math.abs(toCol - fromCol) === 2) {
+      const isKingSide = toCol > fromCol;
+      const rookFromCol = isKingSide ? 7 : 0;
+      const rookToCol = isKingSide ? 5 : 3;
+      const rookRow = fromRow;
+      
+      // Move rook
+      const rook = this.board[rookRow][rookFromCol];
+      this.board[rookRow][rookToCol] = rook;
+      this.board[rookRow][rookFromCol] = null;
+    }
+    
     // Move piece
     this.board[toRow][toCol] = piece;
     this.board[fromRow][fromCol] = null;
+    
+    // Update castling rights
+    if (piece.type === 'k') {
+      if (piece.color === 'w') {
+        this.state.castlingRights.whiteKingSide = false;
+        this.state.castlingRights.whiteQueenSide = false;
+      } else {
+        this.state.castlingRights.blackKingSide = false;
+        this.state.castlingRights.blackQueenSide = false;
+      }
+    }
+    if (piece.type === 'r') {
+      if (from === 'a1') this.state.castlingRights.whiteQueenSide = false;
+      if (from === 'h1') this.state.castlingRights.whiteKingSide = false;
+      if (from === 'a8') this.state.castlingRights.blackQueenSide = false;
+      if (from === 'h8') this.state.castlingRights.blackKingSide = false;
+    }
+    
+    // Remove any existing cooldowns on the destination square
+    this.state.pieceCooldowns = this.state.pieceCooldowns.filter(
+      pc => pc.square !== to
+    );
+    
     // Add cooldown on destination square
     const cooldownEnd = new Date(now.getTime() + this.state.settings.pieceCooldownSeconds * 1000);
     this.state.pieceCooldowns.push({
@@ -306,10 +424,17 @@ export class Game {
     });
     // Add to player move history
     this.state.playerMoveHistory.push({ playerId, timestamp: now });
+    
+    // Add to game move history
+    this.state.moveHistory.push({ from, to, piece, captured: actualCaptured });
+    
+    // Clear any pending promotion state since a move was successfully made
+    this.state.pendingPromotion = undefined;
+    
     this.cleanupOldData();
     // Check for game end
     this.checkGameEnd();
-    return { success: true, move: { from, to, piece, captured } };
+    return { success: true, move: { from, to, piece, captured: actualCaptured } };
   }
 
   private cleanupOldData(): void {
@@ -367,7 +492,7 @@ export class Game {
             (pc) => pc.square === square && pc.playerId === playerId && pc.availableAt > now
           );
           if (!isOnCooldown) {
-            const moves = getMovesForPiece(piece, rank, file, this.board);
+            const moves = getMovesForPiece(piece, rank, file, this.board, this.state.moveHistory, this.state.castlingRights);
             possibleMoves[square] = moves.map((m: { to: Square }) => m.to);
           }
         }
@@ -397,7 +522,7 @@ export class Game {
 }
 
 // Implement isLegalMove (minimal, no check/checkmate)
-function isLegalMove(piece: Piece, fromRow: number, fromCol: number, toRow: number, toCol: number, board: (Piece | null)[][], side: 'white' | 'black'): boolean {
+function isLegalMove(piece: Piece, fromRow: number, fromCol: number, toRow: number, toCol: number, board: (Piece | null)[][], side: 'white' | 'black', castlingRights?: any, moveHistory?: any[]): boolean {
   // Only allow moves within bounds
   if (toRow < 0 || toRow > 7 || toCol < 0 || toCol > 7) return false;
   if (fromRow === toRow && fromCol === toCol) return false;
@@ -410,10 +535,32 @@ function isLegalMove(piece: Piece, fromRow: number, fromCol: number, toRow: numb
     case 'p': {
       // Pawns move forward (direction depends on color)
       const dir = piece.color === 'w' ? -1 : 1;
-      // Move forward
+      const startRow = piece.color === 'w' ? 6 : 1;
+      
+      // Move forward one square
       if (dc === 0 && dr === dir && !target) return true;
-      // Capture
+      
+      // Move forward two squares on first move
+      if (dc === 0 && dr === 2 * dir && fromRow === startRow && !target && !board[fromRow + dir][fromCol]) return true;
+      
+      // Capture diagonally
       if (Math.abs(dc) === 1 && dr === dir && target && target.color !== piece.color) return true;
+      
+      // En passant capture
+      if (Math.abs(dc) === 1 && dr === dir && !target && moveHistory && moveHistory.length > 0) {
+        const lastMove = moveHistory[moveHistory.length - 1];
+        // Check if last move was a pawn moving two squares
+        if (lastMove.piece.type === 'p' && 
+            lastMove.piece.color !== piece.color &&
+            Math.abs(squareToCoords(lastMove.to)[0] - squareToCoords(lastMove.from)[0]) === 2) {
+          // Check if the target square is where we can capture en passant
+          const [lastToRow, lastToCol] = squareToCoords(lastMove.to);
+          if (lastToRow === fromRow && lastToCol === toCol) {
+            return true;
+          }
+        }
+      }
+      
       return false;
     }
     case 'n': {
@@ -462,7 +609,38 @@ function isLegalMove(piece: Piece, fromRow: number, fromCol: number, toRow: numb
       return false;
     }
     case 'k': {
+      // Normal king move
       if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1) return true;
+      
+      // Castling
+      if (dr === 0 && Math.abs(dc) === 2 && castlingRights) {
+        const isWhite = piece.color === 'w';
+        const baseRow = isWhite ? 7 : 0;
+        const rookCol = dc > 0 ? 7 : 0; // King side or queen side
+        
+        // Check if castling is allowed
+        if (fromRow !== baseRow || fromCol !== 4) return false;
+        
+        const canCastle = dc > 0 
+          ? (isWhite ? castlingRights.whiteKingSide : castlingRights.blackKingSide)
+          : (isWhite ? castlingRights.whiteQueenSide : castlingRights.blackQueenSide);
+        
+        if (!canCastle) return false;
+        
+        // Check if rook is in place
+        const rook = board[baseRow][rookCol];
+        if (!rook || rook.type !== 'r' || rook.color !== piece.color) return false;
+        
+        // Check if path is clear
+        const startCol = Math.min(fromCol, rookCol);
+        const endCol = Math.max(fromCol, rookCol);
+        for (let col = startCol + 1; col < endCol; col++) {
+          if (board[baseRow][col]) return false;
+        }
+        
+        return true;
+      }
+      
       return false;
     }
     default:
@@ -471,14 +649,14 @@ function isLegalMove(piece: Piece, fromRow: number, fromCol: number, toRow: numb
 }
 
 // Update getMovesForPiece to allow null piece
-function getMovesForPiece(piece: Piece | null, row: number, col: number, board: (Piece | null)[][]): { from: Square, to: Square }[] {
+function getMovesForPiece(piece: Piece | null, row: number, col: number, board: (Piece | null)[][], moveHistory: any[], castlingRights: any): { from: Square, to: Square }[] {
   if (!piece) return [];
   // ... implement logic to get legal moves for a given piece ...
   // For now, just return all legal moves for this piece type
   const moves: { from: Square, to: Square }[] = [];
   for (let toRow = 0; toRow < 8; toRow++) {
     for (let toCol = 0; toCol < 8; toCol++) {
-      if (isLegalMove(piece, row, col, toRow, toCol, board, piece.color === 'w' ? 'white' : 'black')) {
+      if (isLegalMove(piece, row, col, toRow, toCol, board, piece.color === 'w' ? 'white' : 'black', castlingRights, moveHistory)) {
         moves.push({ from: coordsToSquare(row, col), to: coordsToSquare(toRow, toCol) });
       }
     }

@@ -64,8 +64,14 @@ function GamePageContent() {
     setGameSettings(settings);
   };
 
-  const handleMove = (from: string, to: string) => {
-    makeMove(from as Square, to as Square);
+  const handleMove = (from: string, to: string, promotion?: string) => {
+    makeMove(from as Square, to as Square, promotion);
+  };
+
+  const handleNewGame = () => {
+    // For now, redirect to home to create a new game
+    // Could be enhanced to create a new game with same players
+    router.push("/");
   };
 
   if (!gameId) {
@@ -182,6 +188,23 @@ function GamePageContent() {
             movesLeft={movesLeft}
             onMove={handleMove}
             onRequestPossibleMoves={requestPossibleMoves}
+            onNewGame={handleNewGame}
+          />
+        )}
+
+        {gameState?.status === "finished" && (
+          <GameStarted
+            gameState={gameState}
+            playerId={playerId}
+            gameId={gameId}
+            isConnected={isConnected}
+            isSpectator={isSpectator}
+            possibleMoves={possibleMoves}
+            pieceCooldowns={pieceCooldowns}
+            movesLeft={movesLeft}
+            onMove={handleMove}
+            onRequestPossibleMoves={requestPossibleMoves}
+            onNewGame={handleNewGame}
           />
         )}
       </div>
