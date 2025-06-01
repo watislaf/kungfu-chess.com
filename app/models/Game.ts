@@ -598,13 +598,27 @@ export class Game {
         // Piece still has hit points, don't capture it
         // The attacker doesn't move, only the defender loses HP
         
-        // Add cooldown and move history (but no actual movement)
-        this.addCooldownAndHistory(playerId, from, now, from, from, piece, undefined, to);
+        // Add cooldown on the attacker's square (not the target)
+        const cooldownEnd = new Date(now.getTime() + this.state.settings!.pieceCooldownSeconds * 1000);
+        this.state.pieceCooldowns = this.state.pieceCooldowns.filter(pc => pc.square !== from);
+        this.state.pieceCooldowns.push({
+          square: from,
+          playerId,
+          availableAt: cooldownEnd
+        });
+        
+        // Add to player move history
+        this.state.playerMoveHistory.push({ playerId, timestamp: now });
+        
+        // Add to game move history showing attack without movement
+        this.state.moveHistory.push({ from, to: from, piece, captured: undefined, attackTarget: to });
         
         this.cleanupOldData();
         this.checkGameEnd();
         this.updateCheckStatus();
+        this.state.lastActivity = new Date();
         
+        // Return success but with no visual movement - piece attacks in place
         return { success: true, move: { from, to: from, piece, captured: undefined, attackTarget: to } };
       }
       // If hit points reach 0, continue with normal capture logic below
