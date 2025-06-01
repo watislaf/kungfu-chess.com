@@ -3,7 +3,10 @@
 🚀 **Play Chess Like Never Before** - Experience the revolutionary **simultaneous chess** gameplay where both players move at the same time! No turns, no waiting - just pure chess strategy at lightning speed.
 
 
-Uploading Screen Recording Jun 1 2025 (2).mp4…
+https://github.com/user-attachments/assets/2dcac36f-a8e5-46cd-b907-8773ee9da3c1
+
+
+ 
 
 
 🌐 **Play Now**: [https://kungfu-chess.com](https://kungfu-chess.com)
