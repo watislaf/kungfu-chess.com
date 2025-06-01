@@ -13,6 +13,7 @@ interface AuthState {
   player: PlayerProfile | null;
   isLoading: boolean;
   error: string | null;
+  sessionToken?: string;
 }
 
 // Helper functions for localStorage persistence
@@ -21,6 +22,7 @@ const AUTH_STORAGE_KEY = 'rapid-chess-auth';
 interface StoredAuthData {
   isAuthenticated: boolean;
   player: PlayerProfile | null;
+  sessionToken?: string;
 }
 
 const saveAuthToStorage = (authData: StoredAuthData) => {
@@ -72,6 +74,7 @@ export function useAuth({ socket }: UseAuthProps) {
       player: storedAuth?.player || null,
     isLoading: false,
     error: null,
+    sessionToken: storedAuth?.sessionToken,
     };
   });
 
@@ -81,13 +84,13 @@ export function useAuth({ socket }: UseAuthProps) {
 
   // On socket connection, validate stored authentication with server (only once per connection)
   useEffect(() => {
-    if (!socket || !authState.isAuthenticated || !authState.player || hasValidatedSession) return;
+    if (!socket || !authState.isAuthenticated || !authState.player || !authState.sessionToken || hasValidatedSession) return;
 
-    console.log('🔍 Validating stored session for player:', authState.player.displayName);
-    // Validate stored session with server
-    socket.emit('auth:validate-session', { playerId: authState.player.id });
+    console.log('🔍 Validating stored session token for player:', authState.player.displayName);
+    // Validate stored session with server using secure token
+    socket.emit('auth:validate-session', { sessionToken: authState.sessionToken });
     setHasValidatedSession(true);
-  }, [socket, authState.isAuthenticated, authState.player?.id, hasValidatedSession]);
+  }, [socket, authState.isAuthenticated, authState.player?.id, authState.sessionToken, hasValidatedSession]);
 
   // Reset validation flag when socket disconnects
   useEffect(() => {
@@ -100,22 +103,24 @@ export function useAuth({ socket }: UseAuthProps) {
   useEffect(() => {
     if (!socket) return;
 
-    const handleLoginResponse = (response: { success: boolean; message?: string; player?: PlayerProfile }) => {
+    const handleLoginResponse = (response: { success: boolean; message?: string; player?: PlayerProfile; sessionToken?: string }) => {
       setAuthState(prev => ({ ...prev, isLoading: false }));
       
-      if (response.success && response.player) {
+      if (response.success && response.player && response.sessionToken) {
         const newAuthState = {
           ...authState,
           isAuthenticated: true,
           player: response.player,
+          sessionToken: response.sessionToken,
           error: null,
         };
         setAuthState(newAuthState);
         
-        // Save to localStorage
+        // Save to localStorage with session token
         saveAuthToStorage({
           isAuthenticated: true,
-          player: response.player
+          player: response.player,
+          sessionToken: response.sessionToken
         });
         
         setIsLoginModalOpen(false);
@@ -128,22 +133,24 @@ export function useAuth({ socket }: UseAuthProps) {
       }
     };
 
-    const handleRegisterResponse = (response: { success: boolean; message?: string; player?: PlayerProfile }) => {
+    const handleRegisterResponse = (response: { success: boolean; message?: string; player?: PlayerProfile; sessionToken?: string }) => {
       setAuthState(prev => ({ ...prev, isLoading: false }));
       
-      if (response.success && response.player) {
+      if (response.success && response.player && response.sessionToken) {
         const newAuthState = {
           ...authState,
           isAuthenticated: true,
           player: response.player,
+          sessionToken: response.sessionToken,
           error: null,
         };
         setAuthState(newAuthState);
         
-        // Save to localStorage
+        // Save to localStorage with session token
         saveAuthToStorage({
           isAuthenticated: true,
-          player: response.player
+          player: response.player,
+          sessionToken: response.sessionToken
         });
         
         setIsLoginModalOpen(false);

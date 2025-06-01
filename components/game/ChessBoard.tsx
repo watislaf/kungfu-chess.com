@@ -16,6 +16,7 @@ import { useBoardCustomization } from "@/lib/hooks/useBoardCustomization";
 import { BoardCustomization } from "./BoardCustomization";
 import { getPieceAtSquare, isSquareOnCooldown, getCooldownsForSquare, getNextResetTime, squareToCoords } from "@/lib/utils/chessUtils";
 import { Button } from "../ui/button";
+import { Flag } from "lucide-react";
 
 interface ChessBoardProps {
   gameState: GameState & { board: (any[] | null)[] };
@@ -364,14 +365,16 @@ export function ChessBoard({
                 onPieceThemeChange={boardCustomization.setPieceTheme}
               />
             )}
-            {onSurrender && !isSpectator && gameState.status === 'playing' && (
+            {/* Mobile Surrender Button */}
+            {!isSpectator && gameState.status === 'playing' && onSurrender && (
               <Button
-                variant="ghost"
+                variant="destructive"
                 size="sm"
                 onClick={onSurrender}
-                className="h-6 w-6 p-0 rounded-full bg-red-600/10 hover:bg-red-600/20 border border-red-600/20 shadow-sm"
+                className="h-6 w-6 p-0 rounded-full bg-red-600 hover:bg-red-700 border-2 border-red-800 shadow-lg"
+                title="Surrender Game"
               >
-                <span className="text-red-600 text-xs">⚐</span>
+                <Flag className="h-2.5 w-2.5" />
               </Button>
             )}
           </div>
@@ -486,16 +489,6 @@ export function ChessBoard({
                   onBoardThemeChange={boardCustomization.setBoardTheme}
                   onPieceThemeChange={boardCustomization.setPieceTheme}
                 />
-              )}
-              {onSurrender && !isSpectator && gameState.status === 'playing' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={onSurrender}
-                  className="h-8 w-8 p-0 rounded-full bg-red-600/10 hover:bg-red-600/20 border border-red-600/20 shadow-sm"
-                >
-                  <span className="text-red-600 text-xs">⚐</span>
-                </Button>
               )}
             </div>
           </div>

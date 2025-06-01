@@ -42,7 +42,7 @@ variable "public_key" {
 variable "github_repo" {
   description = "GitHub repository URL"
   type        = string
-  default     = "https://github.com/your-username/rapid-chess-online.git"
+  default     = "https://github.com/watislaf/kungfu-chess.com.git"
 }
 
 variable "github_branch" {

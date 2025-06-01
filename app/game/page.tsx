@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { LogOut, Eye, Github, LogIn, Heart } from "lucide-react";
+import { LogOut, Eye, Github, LogIn, Heart, Flag } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,10 +13,12 @@ import { WaitingRoom } from "@/components/game/WaitingRoom";
 import { GameSettings } from "@/components/game/GameSettings";
 import { GameStarted } from "@/components/game/GameStarted";
 import { TipModal } from "@/components/ui/TipModal";
+import { GameModeConfig } from "@/components/game/GameModeSelector";
 import { useSocket } from "@/lib/hooks/useSocket";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useTipPrompt } from "@/lib/hooks/useTipPrompt";
-import { GameSettings as GameSettingsType } from "@/app/models/Game";
+import { useAIPlayer } from "@/lib/hooks/useAIPlayer";
+import { GameSettings as GameSettingsType, GameState } from "@/app/models/Game";
 import { Square } from "chess.js";
 
 function GamePageContent() {
@@ -28,10 +30,15 @@ function GamePageContent() {
   const [hashGameId, setHashGameId] = useState<string | null>(null);
   const [pendingMoves, setPendingMoves] = useState<Map<string, string>>(new Map()); // moveKey -> moveId
   const [lastGameStatus, setLastGameStatus] = useState<string | null>(null);
+  
+  // AI Mode State
+  const [aiMode, setAiMode] = useState<GameModeConfig>({ mode: 'pvp' });
+  const [isAIGame, setIsAIGame] = useState(false);
+  const [aiGameState, setAiGameState] = useState<(GameState & { board: (any[] | null)[] }) | null>(null);
 
   const {
     isConnected,
-    gameState,
+    gameState: serverGameState,
     playerId,
     isSpectator,
     possibleMoves,
@@ -51,9 +58,256 @@ function GamePageContent() {
     socket,
   } = useSocket();
 
-  const auth = useAuth({ socket });
+  // Use AI game state when in AI mode, otherwise use server game state
+  const gameState = isAIGame && aiGameState ? aiGameState : serverGameState;
 
+  const auth = useAuth({ socket });
   const tipPrompt = useTipPrompt();
+
+  // Generate local possible moves for AI games
+  const [localPossibleMoves, setLocalPossibleMoves] = useState<{ [square: string]: string[] }>({});
+
+  // Generate simple possible moves for AI game (simplified version)
+  const generateLocalPossibleMoves = (gameState: any) => {
+    if (!gameState || !gameState.board) return {};
+    
+    const moves: { [square: string]: string[] } = {};
+    const board = gameState.board;
+    
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = board[row][col];
+        if (piece) {
+          const square = String.fromCharCode(97 + col) + (8 - row);
+          const possibleSquares: string[] = [];
+          
+          // Generate moves based on piece type (simplified)
+          switch (piece.type) {
+            case 'p': // Pawn
+              const direction = piece.color === 'w' ? -1 : 1;
+              const newRow = row + direction;
+              if (newRow >= 0 && newRow < 8) {
+                const targetSquare = String.fromCharCode(97 + col) + (8 - newRow);
+                possibleSquares.push(targetSquare);
+              }
+              break;
+              
+            case 'r': // Rook
+              // Horizontal and vertical moves
+              for (let i = 0; i < 8; i++) {
+                if (i !== col) {
+                  possibleSquares.push(String.fromCharCode(97 + i) + (8 - row));
+                }
+                if (i !== row) {
+                  possibleSquares.push(String.fromCharCode(97 + col) + (8 - i));
+                }
+              }
+              break;
+              
+            case 'n': // Knight
+              const knightMoves = [[-2,-1], [-2,1], [-1,-2], [-1,2], [1,-2], [1,2], [2,-1], [2,1]];
+              for (const [dr, dc] of knightMoves) {
+                const newRow = row + dr;
+                const newCol = col + dc;
+                if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                  possibleSquares.push(String.fromCharCode(97 + newCol) + (8 - newRow));
+                }
+              }
+              break;
+              
+            case 'b': // Bishop
+              // Diagonal moves
+              for (let i = 1; i < 8; i++) {
+                for (const [dr, dc] of [[1,1], [1,-1], [-1,1], [-1,-1]]) {
+                  const newRow = row + dr * i;
+                  const newCol = col + dc * i;
+                  if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                    possibleSquares.push(String.fromCharCode(97 + newCol) + (8 - newRow));
+                  }
+                }
+              }
+              break;
+              
+            case 'q': // Queen (combination of rook and bishop)
+              // All directions
+              for (let i = 1; i < 8; i++) {
+                for (const [dr, dc] of [[0,1], [0,-1], [1,0], [-1,0], [1,1], [1,-1], [-1,1], [-1,-1]]) {
+                  const newRow = row + dr * i;
+                  const newCol = col + dc * i;
+                  if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                    possibleSquares.push(String.fromCharCode(97 + newCol) + (8 - newRow));
+                  }
+                }
+              }
+              break;
+              
+            case 'k': // King
+              for (const [dr, dc] of [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]]) {
+                const newRow = row + dr;
+                const newCol = col + dc;
+                if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                  possibleSquares.push(String.fromCharCode(97 + newCol) + (8 - newRow));
+                }
+              }
+              break;
+          }
+          
+          if (possibleSquares.length > 0) {
+            moves[square] = possibleSquares;
+          }
+        }
+      }
+    }
+    
+    return moves;
+  };
+
+  // Update local possible moves when AI game state changes
+  useEffect(() => {
+    if (isAIGame && aiGameState) {
+      const localMoves = generateLocalPossibleMoves(aiGameState);
+      setLocalPossibleMoves(localMoves);
+      console.log('🤖 Generated local possible moves:', Object.keys(localMoves).length, 'pieces can move');
+    } else {
+      setLocalPossibleMoves({});
+    }
+  }, [isAIGame, aiGameState]);
+
+  // AI Player Hook - use local moves for AI games
+  const aiPlayer = useAIPlayer({
+    isAIEnabled: isAIGame && aiMode.mode === 'ai',
+    aiSide: aiMode.aiSide || 'black',
+    aiDifficulty: aiMode.aiDifficulty || 'medium',
+    gameState,
+    possibleMoves: isAIGame ? localPossibleMoves : possibleMoves,
+    pieceCooldowns,
+    canMakeMove: !!gameState && gameState.status === 'playing' && !isSpectator,
+    onAIMove: (from: Square, to: Square) => {
+      console.log(`🤖 AI making move: ${from} to ${to}`);
+      handleMove(from, to);
+    }
+  });
+
+  // Handle game mode selection
+  const handleModeSelect = (config: GameModeConfig) => {
+    console.log('🎮 Game mode selected:', config);
+    setAiMode(config);
+    
+    if (config.mode === 'ai') {
+      setIsAIGame(true);
+      console.log('🤖 AI mode enabled:', config);
+    } else {
+      setIsAIGame(false);
+    }
+  };
+
+  // Custom ready handler for AI games
+  const handleReadyForAI = () => {
+    if (isAIGame) {
+      console.log('🤖 Starting AI game...');
+      // For AI games, we can start immediately since the AI is always "ready"
+      startGame();
+    } else {
+      startGame();
+    }
+  };
+
+  // Handle starting AI game
+  const handleStartAIGame = () => {
+    if (gameState && isAIGame) {
+      console.log('🤖 Starting AI game directly...');
+      
+      // Create initial chess board
+      const initialBoard = createInitialChessBoard();
+      
+      // For AI games, we'll create a mock game state that shows we're playing
+      // without needing server validation of two players
+      const humanSide = aiMode.aiSide === 'white' ? 'black' : 'white';
+      const humanPlayer = { ...gameState.players[0], side: humanSide as 'white' | 'black' };
+      
+      const aiGameState = {
+        ...gameState,
+        status: 'playing' as const,
+        players: [
+          humanPlayer, // Human player with correct side
+          {
+            id: `ai-${Date.now()}`,
+            socketId: `ai-socket-${Date.now()}`,
+            name: `AI (${aiMode.aiDifficulty?.toUpperCase() || 'MEDIUM'})`,
+            side: (aiMode.aiSide || 'black') as 'white' | 'black',
+            isReady: true
+          }
+        ],
+        bothPlayersReady: true,
+        settings: gameState.settings || {
+          maxMovesPerPeriod: 3,
+          pieceCooldownSeconds: 5,
+          enableRandomPieceGeneration: false,
+          enableHitPointsSystem: false,
+        },
+        board: initialBoard
+      };
+      
+      // Override the game state temporarily for AI mode
+      setAiGameState(aiGameState);
+      
+      // Generate initial possible moves
+      setTimeout(() => {
+        const localMoves = generateLocalPossibleMoves(aiGameState);
+        setLocalPossibleMoves(localMoves);
+        console.log('🤖 AI game started with', Object.keys(localMoves).length, 'possible pieces to move');
+      }, 100);
+    }
+  };
+
+  // Create initial chess board layout
+  const createInitialChessBoard = () => {
+    // Create 8x8 board with initial chess position
+    const board = Array(8).fill(null).map(() => Array(8).fill(null));
+    
+    // Place pawns
+    for (let i = 0; i < 8; i++) {
+      board[1][i] = { type: 'p', color: 'b' };
+      board[6][i] = { type: 'p', color: 'w' };
+    }
+    
+    // Place other pieces
+    const pieces = ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'];
+    for (let i = 0; i < 8; i++) {
+      board[0][i] = { type: pieces[i], color: 'b' };
+      board[7][i] = { type: pieces[i], color: 'w' };
+    }
+    
+    return board;
+  };
+
+  // Handle leaving AI game
+  const handleLeaveAIGame = () => {
+    console.log('👋 Leaving AI game...');
+    
+    // Reset AI mode state
+    setIsAIGame(false);
+    setAiGameState(null);
+    setAiMode({ mode: 'pvp' });
+    
+    // Leave the actual game on the server
+    leaveGame();
+  };
+
+  // Sync AI game state with server changes when needed
+  useEffect(() => {
+    if (!isAIGame || !serverGameState) {
+      setAiGameState(null);
+      return;
+    }
+    
+    // If server game state changes significantly (like player leaving), 
+    // reset AI game state to let server state take over
+    if (serverGameState.players.length === 0) {
+      setAiGameState(null);
+      setIsAIGame(false);
+    }
+  }, [isAIGame, serverGameState]);
 
   useEffect(() => {
     // Extract game ID from URL hash for backward compatibility
@@ -146,7 +400,44 @@ function GamePageContent() {
       return newMap;
     });
     
-    makeMove(from as Square, to as Square, promotion);
+    // For AI games, handle moves locally
+    if (isAIGame && aiGameState) {
+      handleAIGameMove(from, to, promotion);
+    } else {
+      // Regular server-based move
+      makeMove(from as Square, to as Square, promotion);
+    }
+  };
+
+  // Handle moves in AI game mode (local simulation)
+  const handleAIGameMove = (from: string, to: string, promotion?: string) => {
+    console.log(`🎮 Local AI game move: ${from} to ${to}`);
+    
+    // For now, we'll simulate the move by updating the local state
+    // In a real implementation, you might want to have a local chess engine
+    // But for this demo, we'll just assume moves are valid and update the board
+    
+    // Create a simple move in the move history
+    const moveRecord = {
+      from: from as Square,
+      to: to as Square,
+      piece: { type: 'p' as const, color: 'w' as const }, // Simplified
+      timestamp: new Date()
+    };
+    
+    if (aiGameState) {
+      const updatedGameState = {
+        ...aiGameState,
+        moveHistory: [...aiGameState.moveHistory, moveRecord]
+      };
+      
+      setAiGameState(updatedGameState);
+      
+      // Simulate successful move
+      setTimeout(() => {
+        handleMoveSuccess('ai-move-' + Date.now());
+      }, 100);
+    }
   };
 
   const handleMoveSuccess = (moveId: string) => {
@@ -193,7 +484,7 @@ function GamePageContent() {
 
   const openGitHubRepo = () => {
     // Open GitHub repository (replace with actual repo URL when available)
-    window.open('https://github.com/your-username/rapid-chess-online', '_blank');
+    window.open('https://github.com/watislaf/kungfu-chess.com', '_blank');
   };
 
   const handleLoginRedirect = () => {
@@ -258,6 +549,18 @@ function GamePageContent() {
         )}
       </div>
 
+      {/* AI Status Indicator */}
+      {isAIGame && aiPlayer.isAIEnabled && (
+        <div className="fixed top-4 left-4 z-40">
+          <Badge 
+            variant="secondary" 
+            className={`${aiPlayer.isAIThinking ? 'animate-pulse bg-yellow-500/20 text-yellow-600' : 'bg-blue-500/20 text-blue-600'} border-0`}
+          >
+            🤖 AI {aiPlayer.isAIThinking ? 'Thinking...' : `(${aiPlayer.aiDifficulty})`}
+          </Badge>
+        </div>
+      )}
+
       {/* Mobile layout - no margins/padding, full screen usage */}
       <div className="sm:hidden">
         {/* Game states for mobile */}
@@ -271,6 +574,10 @@ function GamePageContent() {
               isMatchmaking={isMatchmaking}
               onFindRandomPlayer={findRandomPlayer}
               onCancelMatchmaking={cancelMatchmaking}
+              onModeSelect={handleModeSelect}
+              isAIGame={isAIGame}
+              onStartAIGame={handleStartAIGame}
+              onLeaveGame={handleLeaveAIGame}
             />
           </div>
         )}
@@ -282,7 +589,7 @@ function GamePageContent() {
               playerId={playerId}
               shareableLink={shareableLink}
               onSwitchSides={switchSides}
-              onReady={startGame}
+              onReady={handleReadyForAI}
               onSettingsSubmit={handleSettingsSubmit}
               isSpectator={isSpectator}
             />
@@ -297,7 +604,7 @@ function GamePageContent() {
               gameId={gameId}
               isConnected={isConnected}
               isSpectator={isSpectator}
-              possibleMoves={possibleMoves}
+              possibleMoves={isAIGame ? localPossibleMoves : possibleMoves}
               pieceCooldowns={pieceCooldowns}
               movesLeft={movesLeft}
               onMove={handleMove}
@@ -370,6 +677,21 @@ function GamePageContent() {
               </div>
             </div>
           </div>
+          
+          {/* Exit/Surrender Button */}
+          {!isSpectator && (gameState?.status === 'playing' || gameState?.status === 'finished') && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleSurrender}
+                className="h-6 w-6 sm:h-8 sm:w-8 p-0 rounded-full bg-red-600 hover:bg-red-700 border-2 border-red-800 shadow-lg"
+                title="Surrender Game"
+              >
+                <Flag className="h-2.5 w-2.5 sm:h-4 sm:w-4" />
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Loading states - more compact */}
@@ -405,6 +727,10 @@ function GamePageContent() {
             isMatchmaking={isMatchmaking}
             onFindRandomPlayer={findRandomPlayer}
             onCancelMatchmaking={cancelMatchmaking}
+            onModeSelect={handleModeSelect}
+            isAIGame={isAIGame}
+            onStartAIGame={handleStartAIGame}
+            onLeaveGame={handleLeaveAIGame}
           />
         )}
 
@@ -414,7 +740,7 @@ function GamePageContent() {
             playerId={playerId}
             shareableLink={shareableLink}
             onSwitchSides={switchSides}
-            onReady={startGame}
+            onReady={handleReadyForAI}
             onSettingsSubmit={handleSettingsSubmit}
             isSpectator={isSpectator}
           />
@@ -427,7 +753,7 @@ function GamePageContent() {
             gameId={gameId}
             isConnected={isConnected}
             isSpectator={isSpectator}
-            possibleMoves={possibleMoves}
+            possibleMoves={isAIGame ? localPossibleMoves : possibleMoves}
             pieceCooldowns={pieceCooldowns}
             movesLeft={movesLeft}
             onMove={handleMove}
@@ -447,7 +773,7 @@ function GamePageContent() {
             gameId={gameId}
             isConnected={isConnected}
             isSpectator={isSpectator}
-            possibleMoves={possibleMoves}
+            possibleMoves={isAIGame ? localPossibleMoves : possibleMoves}
             pieceCooldowns={pieceCooldowns}
             movesLeft={movesLeft}
             onMove={handleMove}

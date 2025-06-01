@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Check } from "lucide-react";
+import { Clock, Check, X } from "lucide-react";
 import { Player } from "@/app/models/Game";
 
 interface ReadyButtonProps {
@@ -20,16 +20,17 @@ export function ReadyButton({ currentPlayer, otherPlayer, bothReady, onReady }: 
       <div className="flex justify-center">
         <Button
           onClick={onReady}
-          disabled={isReady}
           size="lg"
           className={`w-full max-w-sm rounded-xl transition-all duration-200 hover:scale-105 h-12 text-base font-medium shadow-lg ${
-            isReady ? "bg-green-600 hover:bg-green-600" : "bg-primary hover:bg-primary/90"
+            isReady 
+              ? "bg-orange-600 hover:bg-orange-700" 
+              : "bg-primary hover:bg-primary/90"
           }`}
         >
           {isReady ? (
             <>
-              <Check className="mr-2 h-5 w-5" />
-              <span>You're Ready!</span>
+              <X className="mr-2 h-5 w-5" />
+              <span>Unready</span>
             </>
           ) : (
             <>

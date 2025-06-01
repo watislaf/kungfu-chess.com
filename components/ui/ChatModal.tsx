@@ -41,7 +41,7 @@ export function ChatModal({ isOpen, onClose }: ChatModalProps) {
   };
 
   const openGitHub = () => {
-    window.open("https://github.com/your-username/rapid-chess-online", "_blank");
+    window.open("https://github.com/watislaf/kungfu-chess.com", "_blank");
   };
 
   const handleClose = () => {

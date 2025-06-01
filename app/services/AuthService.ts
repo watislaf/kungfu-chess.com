@@ -10,13 +10,30 @@ import {
 } from '@/app/models/Player';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseAdapter } from './DatabaseAdapter';
+import crypto from 'crypto';
+
+// Session management
+interface PlayerSession {
+  sessionToken: string;
+  playerId: string;
+  createdAt: Date;
+  lastActivity: Date;
+  socketId?: string;
+}
 
 export class AuthService {
   private static instance: AuthService;
   private db: DatabaseAdapter;
+  private activeSessions: Map<string, PlayerSession> = new Map();
+  private sessionCleanupInterval: NodeJS.Timeout;
 
   private constructor() {
     this.db = DatabaseAdapter.getInstance();
+    
+    // Clean up expired sessions every 30 minutes
+    this.sessionCleanupInterval = setInterval(() => {
+      this.cleanupExpiredSessions();
+    }, 30 * 60 * 1000);
   }
 
   static getInstance(): AuthService {
@@ -26,7 +43,7 @@ export class AuthService {
     return AuthService.instance;
   }
 
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
+  async login(credentials: LoginCredentials, socketId?: string): Promise<AuthResponse & { sessionToken?: string }> {
     try {
       const player = await this.db.getPlayerByUsername(credentials.username);
       
@@ -49,9 +66,13 @@ export class AuthService {
       player.lastLoginAt = new Date();
       await this.db.updatePlayer(player);
 
+      // Create secure session
+      const sessionToken = this.createSession(player.id, socketId);
+
       return {
         success: true,
-        player: { ...player }
+        player: { ...player },
+        sessionToken
       };
     } catch (error) {
       console.error('Login error:', error);
@@ -62,7 +83,7 @@ export class AuthService {
     }
   }
 
-  async register(data: RegisterData): Promise<AuthResponse> {
+  async register(data: RegisterData, socketId?: string): Promise<AuthResponse & { sessionToken?: string }> {
     try {
       // Check if username already exists
       const existingPlayer = await this.db.getPlayerByUsername(data.username);
@@ -117,9 +138,13 @@ export class AuthService {
 
       await this.db.createPlayer(player);
 
+      // Create secure session
+      const sessionToken = this.createSession(player.id, socketId);
+
       return {
         success: true,
-        player: { ...player }
+        player: { ...player },
+        sessionToken
       };
     } catch (error) {
       console.error('Registration error:', error);
@@ -134,26 +159,18 @@ export class AuthService {
     return this.db.getPlayerById(id);
   }
 
-  async validateSession(playerId: string): Promise<{ valid: boolean; player?: PlayerProfile }> {
-    try {
-      const player = await this.db.getPlayerById(playerId);
-      
-      if (!player) {
-        return { valid: false };
-      }
+  // DEPRECATED: Use validateSessionToken instead
+  // This method is kept for backward compatibility but should be phased out
+  async validateSessionOld(playerId: string): Promise<{ valid: boolean; player?: PlayerProfile }> {
+    console.warn('⚠️ DEPRECATED: validateSessionOld(playerId) is insecure. Use validateSessionToken() instead.');
+    
+    // For now, we'll just return invalid to force migration to secure tokens
+    return { valid: false };
+  }
 
-      // Update last login to current time
-      player.lastLoginAt = new Date();
-      await this.db.updatePlayer(player);
-
-      return { 
-        valid: true, 
-        player: { ...player }
-      };
-    } catch (error) {
-      console.error('Session validation error:', error);
-      return { valid: false };
-    }
+  // New secure session validation method
+  async validateSession(sessionToken: string, socketId?: string): Promise<{ valid: boolean; player?: PlayerProfile; playerId?: string }> {
+    return this.validateSessionToken(sessionToken, socketId);
   }
 
   async updatePlayerAfterGame(
@@ -226,5 +243,126 @@ export class AuthService {
 
   getLeaderboard(limit: number = 20): Promise<PlayerProfile[]> {
     return this.db.getLeaderboard(limit);
+  }
+
+  // Generate a secure session token
+  private generateSessionToken(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  // Create a new session for a player
+  private createSession(playerId: string, socketId?: string): string {
+    const sessionToken = this.generateSessionToken();
+    const session: PlayerSession = {
+      sessionToken,
+      playerId,
+      createdAt: new Date(),
+      lastActivity: new Date(),
+      socketId
+    };
+    
+    // Remove any existing sessions for this player
+    this.invalidatePlayerSessions(playerId);
+    
+    // Add new session
+    this.activeSessions.set(sessionToken, session);
+    
+    console.log(`🔐 Created session for player ${playerId}: ${sessionToken.substring(0, 8)}...`);
+    return sessionToken;
+  }
+
+  // Validate session token and return player info
+  async validateSessionToken(sessionToken: string, socketId?: string): Promise<{ valid: boolean; player?: PlayerProfile; playerId?: string }> {
+    try {
+      const session = this.activeSessions.get(sessionToken);
+      
+      if (!session) {
+        console.log(`❌ Invalid session token: ${sessionToken.substring(0, 8)}...`);
+        return { valid: false };
+      }
+      
+      // Check if session is expired (24 hours)
+      const now = new Date();
+      const sessionAge = now.getTime() - session.createdAt.getTime();
+      const MAX_SESSION_AGE = 24 * 60 * 60 * 1000; // 24 hours
+      
+      if (sessionAge > MAX_SESSION_AGE) {
+        console.log(`❌ Expired session token: ${sessionToken.substring(0, 8)}...`);
+        this.activeSessions.delete(sessionToken);
+        return { valid: false };
+      }
+      
+      // Update last activity and socket ID
+      session.lastActivity = now;
+      if (socketId) {
+        session.socketId = socketId;
+      }
+      
+      // Get player data
+      const player = await this.db.getPlayerById(session.playerId);
+      if (!player) {
+        console.log(`❌ Player not found for session: ${session.playerId}`);
+        this.activeSessions.delete(sessionToken);
+        return { valid: false };
+      }
+      
+      console.log(`✅ Valid session for player: ${player.displayName}`);
+      return { 
+        valid: true, 
+        player: { ...player },
+        playerId: session.playerId
+      };
+    } catch (error) {
+      console.error('Session validation error:', error);
+      return { valid: false };
+    }
+  }
+
+  // Clean up expired sessions
+  private cleanupExpiredSessions(): void {
+    const now = new Date();
+    const MAX_SESSION_AGE = 24 * 60 * 60 * 1000; // 24 hours
+    const expiredSessions: string[] = [];
+    
+    for (const [token, session] of this.activeSessions.entries()) {
+      const sessionAge = now.getTime() - session.createdAt.getTime();
+      if (sessionAge > MAX_SESSION_AGE) {
+        expiredSessions.push(token);
+      }
+    }
+    
+    expiredSessions.forEach(token => {
+      this.activeSessions.delete(token);
+    });
+    
+    if (expiredSessions.length > 0) {
+      console.log(`🧹 Cleaned up ${expiredSessions.length} expired sessions`);
+    }
+  }
+
+  // Invalidate all sessions for a player
+  private invalidatePlayerSessions(playerId: string): void {
+    const tokensToDelete: string[] = [];
+    
+    for (const [token, session] of this.activeSessions.entries()) {
+      if (session.playerId === playerId) {
+        tokensToDelete.push(token);
+      }
+    }
+    
+    tokensToDelete.forEach(token => {
+      this.activeSessions.delete(token);
+    });
+    
+    if (tokensToDelete.length > 0) {
+      console.log(`🔒 Invalidated ${tokensToDelete.length} sessions for player ${playerId}`);
+    }
+  }
+
+  // Invalidate a specific session
+  invalidateSession(sessionToken: string): void {
+    if (this.activeSessions.delete(sessionToken)) {
+      console.log(`🔒 Invalidated session: ${sessionToken.substring(0, 8)}...`);
+    }
   }
 } 
