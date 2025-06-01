@@ -20,6 +20,14 @@ interface OptimisticMove {
   confirmed?: boolean; // Track if move was confirmed by server
 }
 
+interface OptimisticCooldown {
+  id: string;
+  square: SquareType;
+  playerId: string;
+  availableAt: Date;
+  timestamp: number;
+}
+
 export function useChessBoardState({ gameState, playerId, movesLeft, playerSide, serverPossibleMoves }: UseChessBoardStateProps) {
   const [selectedSquare, setSelectedSquare] = useState<SquareType | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -37,6 +45,9 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
   const [pendingMoves, setPendingMoves] = useState<OptimisticMove[]>([]);
   const [optimisticBoard, setOptimisticBoard] = useState<(any[] | null)[]>(gameState.board);
   const [lastServerMoveCount, setLastServerMoveCount] = useState(0);
+  
+  // Optimistic cooldowns state
+  const [optimisticCooldowns, setOptimisticCooldowns] = useState<OptimisticCooldown[]>([]);
 
   // Apply optimistic move to board
   const applyOptimisticMove = useCallback((board: (any[] | null)[], from: SquareType, to: SquareType): (any[] | null)[] => {
@@ -110,6 +121,13 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
         }, 1000);
       }
       
+      // Clean up optimistic cooldowns when server responds with real cooldowns
+      // Remove optimistic cooldowns that are older than a few seconds
+      const now = Date.now();
+      setOptimisticCooldowns(prev => prev.filter(cooldown => 
+        (now - cooldown.timestamp) < 10000 // Keep recent ones in case server is slow
+      ));
+      
       setLastServerMoveCount(currentMoveCount);
     }
   }, [gameState.moveHistory, lastServerMoveCount]);
@@ -119,17 +137,32 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
     try {
       const allMoves = calculateOptimisticPossibleMoves(optimisticBoard, playerSide);
       
-      // Filter out moves from pieces that are on cooldown
+      // Filter out moves from pieces that are on cooldown or have pending optimistic moves
       const filteredMoves: { [square: string]: string[] } = {};
       const now = new Date();
       
+      // Get squares that have pending optimistic moves (to prevent rapid successive moves)
+      const squaresWithPendingMoves = new Set(
+        pendingMoves
+          .filter(move => !move.confirmed)
+          .map(move => move.from as string)
+      );
+      
       for (const [square, moves] of Object.entries(allMoves)) {
-        // Check if this piece is on cooldown for this player
-        const isOnCooldown = gameState.pieceCooldowns?.some(
+        // Check if this piece is on cooldown for this player (server cooldowns)
+        const isOnServerCooldown = gameState.pieceCooldowns?.some(
           (pc) => pc.square === square && pc.playerId === playerId && pc.availableAt > now
         );
         
-        if (!isOnCooldown) {
+        // Check if this piece is on optimistic cooldown
+        const isOnOptimisticCooldown = optimisticCooldowns.some(
+          (oc) => oc.square === square && oc.playerId === playerId && oc.availableAt > now
+        );
+        
+        // Check if this square has a pending optimistic move
+        const hasPendingMove = squaresWithPendingMoves.has(square);
+        
+        if (!isOnServerCooldown && !isOnOptimisticCooldown && !hasPendingMove) {
           filteredMoves[square] = moves;
         }
       }
@@ -140,7 +173,7 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
       // Fallback to server moves on error
       return serverPossibleMoves || {};
     }
-  }, [optimisticBoard, playerSide, gameState.pieceCooldowns, playerId, serverPossibleMoves]);
+  }, [optimisticBoard, playerSide, gameState.pieceCooldowns, playerId, serverPossibleMoves, pendingMoves, optimisticCooldowns]);
 
   // Use optimistic moves as the primary source for better responsiveness
   const effectivePossibleMoves = useMemo(() => {
@@ -201,6 +234,15 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
       };
     }
 
+    // Check if this square already has a pending optimistic move
+    const hasPendingMove = pendingMoves.some(move => !move.confirmed && move.from === from);
+    if (hasPendingMove) {
+      return {
+        success: false,
+        error: "Piece already moved! Wait for confirmation..."
+      };
+    }
+
     // Validate move on current optimistic board
     const fromCoords = squareToCoords(from);
     const toCoords = squareToCoords(to);
@@ -210,6 +252,7 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
     }
 
     const [fromRow, fromCol] = fromCoords;
+    const [toRow, toCol] = toCoords;
     const piece = optimisticBoard[fromRow]?.[fromCol];
     
     if (!piece) {
@@ -228,6 +271,43 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
       return { success: false, error: "Invalid move for this piece" };
     }
 
+    // NEW: Check for hit points system attack that won't destroy the target
+    if (gameState.settings?.enableHitPointsSystem) {
+      // Get the target piece from the server board (not optimistic) to check hit points
+      const targetPiece = gameState.board[toRow]?.[toCol];
+      
+      if (targetPiece && targetPiece.color !== piece.color) {
+        // This is an attack on an opponent piece
+        const targetHitPoints = targetPiece.hitPoints ?? 3; // Default to 3 if not set
+        
+        if (targetHitPoints > 1) {
+          // Target piece will survive the attack (will have >= 1 HP remaining)
+          // Don't create an optimistic move since the piece won't actually move
+          // The server will handle this as an attack-in-place
+          console.log(`🛡️ Hit points attack detected: ${from} attacks ${to} (target has ${targetHitPoints} HP, will survive)`);
+          
+          const moveId = `hitpoints-attack-${Date.now()}-${Math.random()}`;
+          
+          // Create optimistic cooldown for the attacker square (since piece doesn't move)
+          const cooldownEndTime = new Date(Date.now() + (gameState.settings.pieceCooldownSeconds * 1000));
+          const optimisticCooldown: OptimisticCooldown = {
+            id: `cooldown-${moveId}`,
+            square: from, // Cooldown on the attacker's square
+            playerId,
+            availableAt: cooldownEndTime,
+            timestamp: Date.now()
+          };
+          
+          setOptimisticCooldowns(prev => [...prev, optimisticCooldown]);
+          
+          // Don't add to pending moves since there's no actual movement
+          // Just return success to allow the move to be sent to server
+          return { success: true, moveId };
+        }
+        // If targetHitPoints <= 1, the piece will be destroyed, so proceed with normal optimistic move
+      }
+    }
+
     const moveId = `${Date.now()}-${Math.random()}`;
     const newMove: OptimisticMove = {
       id: moveId,
@@ -238,20 +318,36 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
       confirmed: false
     };
     
+    // Create optimistic cooldown for the destination square
+    const cooldownEndTime = new Date(Date.now() + (gameState.settings?.pieceCooldownSeconds ?? 5) * 1000);
+    const optimisticCooldown: OptimisticCooldown = {
+      id: `cooldown-${moveId}`,
+      square: to, // Cooldown on the destination square
+      playerId,
+      availableAt: cooldownEndTime,
+      timestamp: Date.now()
+    };
+    
     // Add to pending moves immediately for instant UI response
     setPendingMoves(prev => [...prev, newMove]);
     
+    // Add optimistic cooldown to prevent rapid successive moves
+    setOptimisticCooldowns(prev => [...prev, optimisticCooldown]);
+    
     return { success: true, moveId };
-  }, [canMakeMove, playerId, optimisticBoard, playerSide, effectivePossibleMoves]);
+  }, [canMakeMove, playerId, optimisticBoard, playerSide, effectivePossibleMoves, pendingMoves, gameState.settings, gameState.board]);
 
   // Remove an optimistic move and refresh board state
   const removeOptimisticMoveAndRefresh = useCallback((moveId: string) => {
     setPendingMoves(prev => prev.filter(move => move.id !== moveId));
+    // Also remove associated optimistic cooldown
+    setOptimisticCooldowns(prev => prev.filter(cooldown => cooldown.id !== `cooldown-${moveId}`));
   }, []);
 
   // Force refresh board state from server (for error recovery)
   const forceRefreshBoardState = useCallback(() => {
     setPendingMoves([]);
+    setOptimisticCooldowns([]); // Clear all optimistic cooldowns
     setSelectedSquare(null);
   }, []);
 
@@ -259,6 +355,16 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
   useEffect(() => {
     setSelectedSquare(null);
   }, [gameState.fen]);
+
+  // Periodically clean up expired optimistic cooldowns
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      setOptimisticCooldowns(prev => prev.filter(cooldown => cooldown.availableAt > now));
+    }, 1000); // Clean up every second
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Update local moves when prop changes
   useEffect(() => {
@@ -396,6 +502,7 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
     triggerMagazineError,
     pendingMoves,
     optimisticBoard,
+    optimisticCooldowns,
     addOptimisticMove,
     clearOptimisticMoves,
     removeOptimisticMove,
