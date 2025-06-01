@@ -139,17 +139,33 @@ export class GameManager {
         game.removePlayer(playerId);
         const gameStateAfter = game.getState();
         
-        // If this was an active game with 2 players and now has 0 players, clean it up immediately
-        if (gameStateBefore.status === 'playing' && 
-            gameStateBefore.players.length === 2 && 
-            gameStateAfter.players.length === 0) {
-          console.log(`🧹 Game ${gameId} abandoned by both players - cleaning up immediately`);
+        console.log(`🚪 Player ${playerId} left game ${gameId}. Players before: ${gameStateBefore.players.length}, after: ${gameStateAfter.players.length}`);
+        
+        // Clean up game immediately if no players left, regardless of status
+        if (gameStateAfter.players.length === 0) {
+          console.log(`🧹 Game ${gameId} has no players left - removing game state completely`);
           this.games.delete(gameId);
+          
+          // Clean up any remaining player mappings for this game
+          for (const [mappedPlayerId, mappedGameId] of this.playerToGame.entries()) {
+            if (mappedGameId === gameId) {
+              this.playerToGame.delete(mappedPlayerId);
+              console.log(`🧹 Cleaned up player mapping for ${mappedPlayerId} -> ${gameId}`);
+            }
+          }
         }
-        // Remove game if no players left (for any status)
-        else if (game.getPlayerCount() === 0) {
-          this.games.delete(gameId);
-          console.log(`🧹 Game ${gameId} has no players left - cleaning up`);
+        // Special case: If this was an active game with 2 players and now has only 1 player
+        else if (gameStateBefore.status === 'playing' && 
+                 gameStateBefore.players.length === 2 && 
+                 gameStateAfter.players.length === 1) {
+          console.log(`🎮 Game ${gameId} had active gameplay, one player left - game ended by disconnection`);
+          // The Game.removePlayer method should have already handled setting winner and ending the game
+        }
+        // If game was in waiting/settings and now has only 1 player, reset it properly
+        else if (gameStateAfter.players.length === 1 && 
+                 (gameStateBefore.status === 'settings' || gameStateBefore.status === 'finished')) {
+          console.log(`🔄 Game ${gameId} reset to waiting state with 1 player`);
+          // The Game.removePlayer method should have already handled this
         }
       }
       this.playerToGame.delete(playerId);
@@ -302,7 +318,7 @@ export class GameManager {
     console.log(`🧹 Cleaned up matchmaking queue`);
   }
 
-  // New method to clean up abandoned games
+  // Enhanced method to clean up abandoned games
   cleanupAbandonedGames(): void {
     let cleanedCount = 0;
     const now = new Date();
@@ -311,13 +327,19 @@ export class GameManager {
     for (const [gameId, game] of this.games.entries()) {
       const gameState = game.getState();
       
-      // Check if game has been abandoned (no players or all players disconnected for too long)
+      // Check if game has been abandoned
       const shouldCleanup = 
+        // No players at all
         gameState.players.length === 0 ||
+        // Game was playing but now has less than 2 players and has been inactive
         (gameState.status === 'playing' && 
          gameState.players.length < 2 && 
          gameState.lastActivity && 
-         (now.getTime() - new Date(gameState.lastActivity).getTime()) > abandonedTimeThreshold);
+         (now.getTime() - new Date(gameState.lastActivity).getTime()) > abandonedTimeThreshold) ||
+        // Finished game with no recent activity (over 30 minutes old)
+        (gameState.status === 'finished' &&
+         gameState.lastActivity && 
+         (now.getTime() - new Date(gameState.lastActivity).getTime()) > (30 * 60 * 1000));
 
       if (shouldCleanup) {
         // Clean up player mappings for this game
@@ -330,7 +352,7 @@ export class GameManager {
         // Remove the game
         this.games.delete(gameId);
         cleanedCount++;
-        console.log(`🧹 Cleaned up abandoned game: ${gameId}`);
+        console.log(`🧹 Cleaned up abandoned game: ${gameId} (status: ${gameState.status}, players: ${gameState.players.length})`);
       }
     }
 

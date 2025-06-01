@@ -255,10 +255,14 @@ export class Game {
   removePlayer(playerId: string): void {
     const player = this.state.players.find(p => p.id === playerId);
     const wasInActiveGame = this.state.status === 'playing' && this.state.players.length === 2;
+    const gameStatusBefore = this.state.status;
+    const playersCountBefore = this.state.players.length;
     
     this.state.players = this.state.players.filter(p => p.id !== playerId);
     this.state.spectators = this.state.spectators.filter(s => s.id !== playerId);
     this.state.lastActivity = new Date(); // Update activity timestamp
+    
+    console.log(`👋 Player ${playerId} removed from game ${this.state.id}. Status: ${gameStatusBefore}, Players: ${playersCountBefore} -> ${this.state.players.length}`);
     
     // If a player leaves during an active game, end the game with disconnection
     if (wasInActiveGame && player) {
@@ -267,20 +271,87 @@ export class Game {
         this.state.status = 'finished';
         this.state.winner = remainingPlayer.id;
         this.state.gameEndReason = 'disconnection';
+        console.log(`🏆 Game ${this.state.id} ended by disconnection, winner: ${remainingPlayer.id}`);
         return; // Don't continue with normal waiting room logic
       }
     }
     
-    if (this.state.players.length < 2) {
-      this.state.status = 'waiting';
-      this.state.bothPlayersReady = false;
+    // If no players left, reset game completely to initial state
+    if (this.state.players.length === 0) {
+      console.log(`🔄 No players left in game ${this.state.id} - resetting to initial state`);
+      this.resetToInitialState();
+      return;
     }
     
-    // Reassign sides if needed
+    // If less than 2 players, reset to waiting state and clear any game progress
+    if (this.state.players.length < 2) {
+      console.log(`🔄 Game ${this.state.id} has ${this.state.players.length} player(s) - resetting to waiting state`);
+      this.state.status = 'waiting';
+      this.state.bothPlayersReady = false;
+      this.state.winner = undefined;
+      this.state.gameEndReason = undefined;
+      this.state.pendingPromotion = undefined;
+      this.state.check = undefined;
+      
+      // Reset board and game state if game was in progress
+      if (gameStatusBefore === 'playing' || gameStatusBefore === 'finished') {
+        this.board = createInitialBoard();
+        this.state.moveHistory = [];
+        this.state.pieceCooldowns = [];
+        this.state.playerMoveHistory = [];
+        this.state.castlingRights = {
+          whiteKingSide: true,
+          whiteQueenSide: true,
+          blackKingSide: true,
+          blackQueenSide: true,
+        };
+        this.state.pieceGenerationCooldowns = {};
+        this.lastRandomPieceGeneration = new Date();
+        this.pieceGenerationCounter = 0;
+        this.updateCheckStatus();
+        console.log(`♻️ Game ${this.state.id} board and game state reset to initial position`);
+      }
+    }
+    
+    // Reassign sides if needed (ensure remaining player is white)
     if (this.state.players.length === 1) {
       this.state.players[0].side = 'white';
       this.state.players[0].isReady = false;
+      console.log(`🔄 Reassigned remaining player ${this.state.players[0].id} to white side`);
     }
+  }
+
+  private resetToInitialState(): void {
+    // Reset to completely clean initial state
+    this.state.status = 'waiting';
+    this.state.bothPlayersReady = false;
+    this.state.moveHistory = [];
+    this.state.pieceCooldowns = [];
+    this.state.playerMoveHistory = [];
+    this.state.winner = undefined;
+    this.state.gameEndReason = undefined;
+    this.state.check = undefined;
+    this.state.pendingPromotion = undefined;
+    this.state.pieceGenerationCooldowns = {};
+    this.state.lastActivity = new Date();
+    
+    // Reset castling rights
+    this.state.castlingRights = {
+      whiteKingSide: true,
+      whiteQueenSide: true,
+      blackKingSide: true,
+      blackQueenSide: true,
+    };
+    
+    // Reset board to initial position
+    this.board = createInitialBoard();
+    this.lastRandomPieceGeneration = new Date();
+    this.pieceGenerationCounter = 0;
+    
+    // Update check status
+    this.updateCheckStatus();
+    
+    console.log(`🆕 Game ${this.state.id} completely reset to initial state`);
   }
 
   switchSides(): boolean {
