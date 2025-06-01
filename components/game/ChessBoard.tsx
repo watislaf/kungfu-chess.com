@@ -14,7 +14,7 @@ import { useChessBoardState } from "@/lib/hooks/useChessBoardState";
 import { useGameEffects } from "@/lib/hooks/useGameEffects";
 import { useBoardCustomization } from "@/lib/hooks/useBoardCustomization";
 import { BoardCustomization } from "./BoardCustomization";
-import { getPieceAtSquare, isSquareOnCooldown, getCooldownsForSquare, getNextResetTime } from "@/lib/utils/chessUtils";
+import { getPieceAtSquare, isSquareOnCooldown, getCooldownsForSquare, getNextResetTime, squareToCoords } from "@/lib/utils/chessUtils";
 import { Button } from "../ui/button";
 
 interface ChessBoardProps {
@@ -45,118 +45,210 @@ export function ChessBoard({
   isSpectator,
 }: ChessBoardProps) {
   const [pendingPromotion, setPendingPromotion] = useState<{from: SquareType, to: SquareType} | null>(null);
-  const [isProcessingPromotion, setIsProcessingPromotion] = useState(false);
-
-  const boardState = useChessBoardState({ 
-    gameState, 
-    playerId, 
-    movesLeft, 
+  const [pendingMoveIds, setPendingMoveIds] = useState<Map<string, string>>(new Map()); // from-to -> moveId
+  
+  const boardState = useChessBoardState({
+    gameState,
+    playerId,
+    movesLeft,
     playerSide,
-    serverPossibleMoves: possibleMoves 
+    serverPossibleMoves: possibleMoves,
   });
-  const gameEffects = useGameEffects({ gameState });
+
   const boardCustomization = useBoardCustomization();
+  const gameEffects = useGameEffects({ gameState });
 
-  // Use effective possible moves from board state
-  const effectivePossibleMoves = boardState.effectivePossibleMoves;
+  const {
+    selectedSquare,
+    setSelectedSquare,
+    errorMessage,
+    isReloading,
+    localMovesLeft,
+    setLocalMovesLeft,
+    isOpponentReloading,
+    playerBulletReloadTimes,
+    opponentBulletReloadTimes,
+    magazineError,
+    magazineErrorKey,
+    opponent,
+    maxMoves,
+    opponentMovesLeft,
+    getPlayerMovesLeft,
+    canMakeMove,
+    triggerWiggle,
+    triggerMagazineError,
+    pendingMoves,
+    optimisticBoard,
+    addOptimisticMove,
+    clearOptimisticMoves,
+    removeOptimisticMove,
+    addOptimisticMoveWithValidation,
+    removeOptimisticMoveAndRefresh,
+    forceRefreshBoardState,
+    optimisticPossibleMoves,
+    effectivePossibleMoves,
+  } = boardState;
 
-  // Check for pending promotion from game state
+  // Handle server move errors - revert optimistic moves
   useEffect(() => {
-    if (gameState.pendingPromotion && 
-        gameState.pendingPromotion.playerId === playerId && 
-        !pendingPromotion &&
-        !isProcessingPromotion) {
-      setPendingPromotion({
-        from: gameState.pendingPromotion.from,
-        to: gameState.pendingPromotion.to
-      });
+    if (onMoveError) {
+      // When a move fails on the server, we need to revert the optimistic move
+      const handleMoveError = (moveKey: string, error: string) => {
+        const moveId = pendingMoveIds.get(moveKey);
+        if (moveId) {
+          removeOptimisticMoveAndRefresh(moveId);
+          setPendingMoveIds(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(moveKey);
+            return newMap;
+          });
+          triggerMagazineError(`Move failed: ${error}`);
+        }
+      };
+      
+      // We'll use this in the move handling logic
     }
-    
-    if (!gameState.pendingPromotion && pendingPromotion && !isProcessingPromotion) {
-      setPendingPromotion(null);
-      setIsProcessingPromotion(false);
+  }, [onMoveError, pendingMoveIds, removeOptimisticMoveAndRefresh, triggerMagazineError]);
+
+  // Handle server move success - clean up tracking
+  useEffect(() => {
+    if (onMoveSuccess) {
+      const handleMoveSuccess = (moveId: string) => {
+        // Find and remove the move from tracking
+        for (const [moveKey, id] of pendingMoveIds.entries()) {
+          if (id === moveId) {
+            setPendingMoveIds(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(moveKey);
+              return newMap;
+            });
+            break;
+          }
+        }
+      };
     }
-  }, [gameState.pendingPromotion, playerId, pendingPromotion, isProcessingPromotion]);
+  }, [onMoveSuccess, pendingMoveIds]);
 
   const handlePromotionSelect = (piece: string) => {
-    if (pendingPromotion && !isProcessingPromotion) {
-      setIsProcessingPromotion(true);
+    if (pendingPromotion) {
+      const { from, to } = pendingPromotion;
+      
+      // Enhanced optimistic move for promotion
+      const result = addOptimisticMoveWithValidation(from, to, piece);
+      
+      if (result.success && result.moveId) {
+        // Track the move
+        const moveKey = `${from}-${to}`;
+        setPendingMoveIds(prev => new Map(prev).set(moveKey, result.moveId!));
+        
+        // Update local moves count optimistically
+        setLocalMovesLeft(prev => Math.max(0, prev - 1));
+        
+        // Send to server
+        onMove(from, to, piece);
+      } else {
+        triggerMagazineError(result.error || "Promotion failed");
+      }
+      
       setPendingPromotion(null);
-      onMove(pendingPromotion.from, pendingPromotion.to, piece);
-      setTimeout(() => {
-        setIsProcessingPromotion(false);
-      }, 1000);
     }
   };
 
   const handleSquareClick = (square: SquareType) => {
-    if (!boardState.selectedSquare) {
-      const piece = getPieceAtSquare(square, boardState.optimisticBoard);
+    if (!selectedSquare) {
+      const piece = getPieceAtSquare(square, optimisticBoard);
       if (piece && (piece === piece.toUpperCase() ? "white" : "black") === playerSide) {
         if (isSquareOnCooldown(square, playerId, pieceCooldowns)) {
           const cooldown = pieceCooldowns.find((pc) => pc.square === square);
           const remainingSeconds = cooldown
             ? Math.ceil((cooldown.availableAt.getTime() - Date.now()) / 1000)
             : 0;
-          boardState.triggerWiggle(`Piece on cooldown for ${remainingSeconds}s`);
+          triggerWiggle(`Piece on cooldown for ${remainingSeconds}s`);
           return;
         }
-        boardState.setSelectedSquare(square);
+        setSelectedSquare(square);
       } else {
-        boardState.triggerWiggle("Select your own piece first");
+        triggerWiggle("Select your own piece first");
       }
       return;
     }
 
-    if (boardState.selectedSquare === square) {
-      boardState.setSelectedSquare(null);
+    if (selectedSquare === square) {
+      setSelectedSquare(null);
       return;
     }
 
     if (isPossibleMove(square)) {
       // Enhanced pre-validation: Check if player can make move (including pending moves)
-      if (!boardState.canMakeMove(playerId)) {
-        boardState.triggerMagazineError("No bullets available! Wait for reload...");
+      if (!canMakeMove(playerId)) {
+        triggerMagazineError("No bullets available! Wait for reload...");
         return;
       }
       
       // Use enhanced optimistic move with validation
-      const result = boardState.addOptimisticMoveWithValidation(boardState.selectedSquare, square);
+      const result = addOptimisticMoveWithValidation(selectedSquare, square);
       
       if (!result.success) {
-        boardState.triggerMagazineError(result.error || "Cannot make move");
+        triggerMagazineError(result.error || "Cannot make move");
         return;
       }
       
-      // Update local moves count optimistically
-      boardState.setLocalMovesLeft(prev => Math.max(0, prev - 1));
+      // Track the move for error handling
+      const moveKey = `${selectedSquare}-${square}`;
+      if (result.moveId) {
+        setPendingMoveIds(prev => new Map(prev).set(moveKey, result.moveId!));
+      }
       
-      // Send move to server
-      onMove(boardState.selectedSquare, square);
-      boardState.setSelectedSquare(null);
+      // Update local moves count optimistically
+      setLocalMovesLeft(prev => Math.max(0, prev - 1));
+      
+      // Check for pawn promotion
+      const fromCoords = squareToCoords(selectedSquare);
+      const toCoords = squareToCoords(square);
+      
+      if (fromCoords && toCoords) {
+        const [fromRow, fromCol] = fromCoords;
+        const [toRow] = toCoords;
+        const pieceObj = optimisticBoard[fromRow]?.[fromCol];
+        
+        if (pieceObj && pieceObj.type === 'p') {
+          const promotionRow = pieceObj.color === 'w' ? 0 : 7; // White promotes on rank 8 (row 0), black on rank 1 (row 7)
+          
+          if (toRow === promotionRow) {
+            // Handle promotion
+            setPendingPromotion({ from: selectedSquare, to: square });
+            setSelectedSquare(null);
+            return;
+          }
+        }
+      }
+      
+      // Send move to server (regular move, no promotion)
+      onMove(selectedSquare, square);
+      setSelectedSquare(null);
       
       // Move completed successfully
     } else {
-      const piece = getPieceAtSquare(square, boardState.optimisticBoard);
+      const piece = getPieceAtSquare(square, optimisticBoard);
       if (piece && (piece === piece.toUpperCase() ? "white" : "black") === playerSide) {
         if (isSquareOnCooldown(square, playerId, pieceCooldowns)) {
           const cooldown = pieceCooldowns.find((pc) => pc.square === square);
           const remainingSeconds = cooldown
             ? Math.ceil((cooldown.availableAt.getTime() - Date.now()) / 1000)
             : 0;
-          boardState.triggerWiggle(`Piece on cooldown for ${remainingSeconds}s`);
+          triggerWiggle(`Piece on cooldown for ${remainingSeconds}s`);
           return;
         }
-        boardState.setSelectedSquare(square);
+        setSelectedSquare(square);
       } else {
-        boardState.setSelectedSquare(null);
+        setSelectedSquare(null);
       }
     }
   };
 
   const isPossibleMove = (square: SquareType): boolean => {
-    return boardState.selectedSquare
-      ? effectivePossibleMoves[boardState.selectedSquare]?.includes(square) || false
+    return selectedSquare
+      ? effectivePossibleMoves[selectedSquare]?.includes(square) || false
       : false;
   };
 
@@ -164,9 +256,9 @@ export function ChessBoard({
     const file = String.fromCharCode(97 + col);
     const rank = 8 - row;
     const square = `${file}${rank}` as SquareType;
-    const piece = getPieceAtSquare(square, boardState.optimisticBoard);
+    const piece = getPieceAtSquare(square, optimisticBoard);
     const isLight = (row + col) % 2 === 0;
-    const isSelected = boardState.selectedSquare === square;
+    const isSelected = selectedSquare === square;
     const cooldowns = getCooldownsForSquare(square, pieceCooldowns);
     const isPlayerPiece = Boolean(
       piece && (piece === piece.toUpperCase() ? "white" : "black") === playerSide
@@ -176,11 +268,11 @@ export function ChessBoard({
     const lastMove = gameState.moveHistory[gameState.moveHistory.length - 1];
     const isLastMoveFrom = lastMove ? lastMove.from === square : false;
     
-    const currentMovesLeft = boardState.getPlayerMovesLeft(playerId);
+    const currentMovesLeft = getPlayerMovesLeft(playerId);
     const canMakeMove = currentMovesLeft > 0;
     
-    const nextMoveAvailableAt = boardState.playerBulletReloadTimes.length > 0 
-      ? boardState.playerBulletReloadTimes.sort((a, b) => a.getTime() - b.getTime())[0]
+    const nextMoveAvailableAt = playerBulletReloadTimes.length > 0 
+      ? playerBulletReloadTimes.sort((a, b) => a.getTime() - b.getTime())[0]
       : undefined;
     
     const isKing = piece && (piece.toLowerCase() === 'k');
@@ -206,7 +298,7 @@ export function ChessBoard({
     const showGenerationTimer = isRookSquare && isEmpty && gameState.settings?.enableRandomPieceGeneration && hasActiveCooldown;
     
     // Add visual indicator for pending optimistic moves
-    const isPendingMove = boardState.pendingMoves.some(move => move.from === square || move.to === square);
+    const isPendingMove = pendingMoves.some(move => move.from === square || move.to === square);
     
     return (
       <div key={`square-${row}-${col}`} className="relative">
@@ -259,8 +351,8 @@ export function ChessBoard({
             >
               {playerSide === "white" ? "♔ White" : "♚ Black"}
             </Badge>
-            {boardState.errorMessage && (
-              <p className="text-xs text-red-500 animate-pulse">{boardState.errorMessage}</p>
+            {errorMessage && (
+              <p className="text-xs text-red-500 animate-pulse">{errorMessage}</p>
             )}
           </div>
           <div className="flex items-center gap-1">
@@ -286,15 +378,15 @@ export function ChessBoard({
         </div>
 
         {/* Opponent bullets at top */}
-        {boardState.opponent && (
+        {opponent && (
           <div className="flex justify-center items-center py-1 px-2 bg-background border-b">
             <BulletCounter
-              movesLeft={boardState.opponentMovesLeft}
-              maxMoves={boardState.maxMoves}
-              isReloading={boardState.isOpponentReloading}
+              movesLeft={opponentMovesLeft}
+              maxMoves={maxMoves}
+              isReloading={isOpponentReloading}
               isOpponent={true}
-              playerName={boardState.opponent.name || "Opponent"}
-              bulletReloadTimes={boardState.opponentBulletReloadTimes}
+              playerName={opponent.name || "Opponent"}
+              bulletReloadTimes={opponentBulletReloadTimes}
               cooldownSeconds={10}
             />
           </div>
@@ -302,7 +394,7 @@ export function ChessBoard({
 
         <div className="p-1">
           <div className="aspect-square w-full max-w-none">
-            <div className={`relative ${boardState.errorMessage ? (playerSide === "black" ? "animate-wiggle-black" : "animate-wiggle") : ""}`}>
+            <div className={`relative ${errorMessage ? (playerSide === "black" ? "animate-wiggle-black" : "animate-wiggle") : ""}`}>
               <div className={`grid grid-cols-8 gap-0 border-0 rounded-lg overflow-hidden shadow-sm ${playerSide === "black" ? "rotate-180" : ""}`}>
                 {Array.from({ length: 8 }).map((_, row) =>
                   Array.from({ length: 8 }).map((_, col) => {
@@ -335,15 +427,15 @@ export function ChessBoard({
         {/* Player bullets at bottom */}
         <div className="flex justify-center items-center py-1 px-2 bg-background border-t">
           <BulletCounter
-            movesLeft={boardState.localMovesLeft}
-            maxMoves={boardState.maxMoves}
-            isReloading={boardState.isReloading}
+            movesLeft={localMovesLeft}
+            maxMoves={maxMoves}
+            isReloading={isReloading}
             isOpponent={false}
             playerName={gameState.players.find(p => p.id === playerId)?.name || "You"}
-            bulletReloadTimes={boardState.playerBulletReloadTimes}
+            bulletReloadTimes={playerBulletReloadTimes}
             cooldownSeconds={10}
-            magazineError={boardState.magazineError}
-            magazineErrorKey={boardState.magazineErrorKey}
+            magazineError={magazineError}
+            magazineErrorKey={magazineErrorKey}
           />
         </div>
 
@@ -412,22 +504,22 @@ export function ChessBoard({
             {/* Left side: Player bullets */}
             <div className="flex flex-row sm:flex-col gap-1 sm:gap-2 min-w-[80px] sm:min-w-[80px] justify-center">
               <BulletCounter
-                movesLeft={boardState.localMovesLeft}
-                maxMoves={boardState.maxMoves}
-                isReloading={boardState.isReloading}
+                movesLeft={localMovesLeft}
+                maxMoves={maxMoves}
+                isReloading={isReloading}
                 isOpponent={false}
                 playerName={gameState.players.find(p => p.id === playerId)?.name || "You"}
-                bulletReloadTimes={boardState.playerBulletReloadTimes}
+                bulletReloadTimes={playerBulletReloadTimes}
                 cooldownSeconds={10}
-                magazineError={boardState.magazineError}
-                magazineErrorKey={boardState.magazineErrorKey}
+                magazineError={magazineError}
+                magazineErrorKey={magazineErrorKey}
               />
             </div>
 
             {/* Board section */}
             <div className="flex-1 w-full">
               <div className="aspect-square max-w-xs sm:max-w-2xl mx-auto">
-                <div className={`relative ${boardState.errorMessage ? (playerSide === "black" ? "animate-wiggle-black" : "animate-wiggle") : ""}`}>
+                <div className={`relative ${errorMessage ? (playerSide === "black" ? "animate-wiggle-black" : "animate-wiggle") : ""}`}>
                   <div className={`grid grid-cols-8 gap-0 border-0 rounded-lg sm:rounded-2xl overflow-hidden shadow-sm sm:shadow-lg ${playerSide === "black" ? "rotate-180" : ""}`}>
                     {Array.from({ length: 8 }).map((_, row) =>
                       Array.from({ length: 8 }).map((_, col) => {
@@ -459,14 +551,14 @@ export function ChessBoard({
 
             {/* Right side: Opponent bullets */}
             <div className="flex flex-row sm:flex-col gap-1 sm:gap-2 min-w-[80px] sm:min-w-[80px] justify-center">
-              {boardState.opponent ? (
+              {opponent ? (
                 <BulletCounter
-                  movesLeft={boardState.opponentMovesLeft}
-                  maxMoves={boardState.maxMoves}
-                  isReloading={boardState.isOpponentReloading}
+                  movesLeft={opponentMovesLeft}
+                  maxMoves={maxMoves}
+                  isReloading={isOpponentReloading}
                   isOpponent={true}
-                  playerName={boardState.opponent.name || "Opponent"}
-                  bulletReloadTimes={boardState.opponentBulletReloadTimes}
+                  playerName={opponent.name || "Opponent"}
+                  bulletReloadTimes={opponentBulletReloadTimes}
                   cooldownSeconds={10}
                 />
               ) : (
@@ -476,8 +568,8 @@ export function ChessBoard({
           </div>
 
           <div className="mt-0.5 text-center space-y-0.5">
-            {boardState.errorMessage && (
-              <p className="text-xs text-red-500 animate-pulse">{boardState.errorMessage}</p>
+            {errorMessage && (
+              <p className="text-xs text-red-500 animate-pulse">{errorMessage}</p>
             )}
 
             <div className="flex justify-center gap-1 sm:gap-2 text-xs text-muted-foreground">
@@ -502,7 +594,6 @@ export function ChessBoard({
           isOpen={true}
           playerSide={playerSide}
           onSelect={handlePromotionSelect}
-          isProcessing={isProcessingPromotion}
         />
       )}
     </>

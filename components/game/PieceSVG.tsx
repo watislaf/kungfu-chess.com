@@ -684,6 +684,10 @@ interface PieceSVGProps {
 }
 
 const PieceSVG = ({ piece, theme = "classic" }: PieceSVGProps) => {
+  if (!piece || typeof piece !== 'string') {
+    return null;
+  }
+  
   const color = piece === piece.toUpperCase() ? "white" : "black";
   const type = piece.toLowerCase() as keyof typeof PIECE_COMPONENTS.classic;
   const themeColors = PIECE_THEME_COLORS[theme] || PIECE_THEME_COLORS.classic;

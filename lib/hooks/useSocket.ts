@@ -53,12 +53,11 @@ export function useSocket(): UseSocketReturn {
       } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         // Local development - use HTTP
         serverUrl = 'http://localhost:3001';
-      } else if (window.location.protocol === 'https:') {
-        // Production HTTPS - use WSS with domain (ALB handles routing)
-        serverUrl = `https://${window.location.hostname}`;
       } else {
-        // Production HTTP fallback - use HTTP with port 3001
-        serverUrl = `http://${window.location.hostname}:3001`;
+        // Production - always use the same protocol as the current page
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+        const port = window.location.protocol === 'https:' ? '' : ':3001';
+        serverUrl = `${protocol}//${window.location.hostname}${port}`;
       }
     }
     

@@ -70,8 +70,8 @@ export function useAuth({ socket }: UseAuthProps) {
     return {
       isAuthenticated: storedAuth?.isAuthenticated || false,
       player: storedAuth?.player || null,
-      isLoading: false,
-      error: null,
+    isLoading: false,
+    error: null,
     };
   });
 

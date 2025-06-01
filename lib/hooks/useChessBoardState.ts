@@ -17,6 +17,7 @@ interface OptimisticMove {
   to: SquareType;
   promotion?: string;
   timestamp: number;
+  confirmed?: boolean; // Track if move was confirmed by server
 }
 
 export function useChessBoardState({ gameState, playerId, movesLeft, playerSide, serverPossibleMoves }: UseChessBoardStateProps) {
@@ -35,47 +36,7 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
   // Optimistic moves state
   const [pendingMoves, setPendingMoves] = useState<OptimisticMove[]>([]);
   const [optimisticBoard, setOptimisticBoard] = useState<(any[] | null)[]>(gameState.board);
-
-  // Calculate optimistic possible moves based on optimistic board
-  const optimisticPossibleMoves = useMemo(() => {
-    try {
-      const allMoves = calculateOptimisticPossibleMoves(optimisticBoard, playerSide);
-      
-      // Filter out moves from pieces that are on cooldown
-      const filteredMoves: { [square: string]: string[] } = {};
-      const now = new Date();
-      
-      for (const [square, moves] of Object.entries(allMoves)) {
-        // Check if this piece is on cooldown for this player
-        const isOnCooldown = gameState.pieceCooldowns?.some(
-          (pc) => pc.square === square && pc.playerId === playerId && pc.availableAt > now
-        );
-        
-        if (!isOnCooldown) {
-          filteredMoves[square] = moves;
-        }
-      }
-      
-      return filteredMoves;
-    } catch (error) {
-      console.error('Error calculating optimistic moves:', error);
-      return {};
-    }
-  }, [optimisticBoard, playerSide, gameState.pieceCooldowns, playerId]);
-
-  // Use optimistic moves if available, otherwise fallback to server moves
-  const effectivePossibleMoves = useMemo(() => {
-    const hasOptimisticMoves = Object.keys(optimisticPossibleMoves).length > 0;
-    const hasServerMoves = serverPossibleMoves ? Object.keys(serverPossibleMoves).length > 0 : false;
-    
-    // If we have pending moves, prefer optimistic calculations
-    if (pendingMoves.length > 0 && hasOptimisticMoves) {
-      return optimisticPossibleMoves;
-    }
-    
-    // Otherwise use server moves
-    return serverPossibleMoves || {};
-  }, [optimisticPossibleMoves, serverPossibleMoves, pendingMoves.length]);
+  const [lastServerMoveCount, setLastServerMoveCount] = useState(0);
 
   // Apply optimistic move to board
   const applyOptimisticMove = useCallback((board: (any[] | null)[], from: SquareType, to: SquareType): (any[] | null)[] => {
@@ -103,7 +64,7 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
     let currentBoard = baseBoard.map(row => row ? [...row] : null);
     
     // Apply each pending move in sequence
-    for (const move of moves) {
+    for (const move of moves.filter(m => !m.confirmed)) {
       currentBoard = applyOptimisticMove(currentBoard, move.from, move.to);
     }
     
@@ -116,10 +77,72 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
     setOptimisticBoard(newOptimisticBoard);
   }, [gameState.board, pendingMoves, applyAllPendingMoves]);
 
-  // Clear pending moves when server state updates (moves have been processed)
+  // Smart move confirmation: only clear moves when we detect actual server move processing
   useEffect(() => {
-    setPendingMoves([]);
-  }, [gameState.board, gameState.fen]);
+    const currentMoveCount = gameState.moveHistory?.length || 0;
+    
+    if (currentMoveCount > lastServerMoveCount) {
+      // Server processed new moves - mark recent pending moves as confirmed
+      const now = Date.now();
+      const recentThreshold = 5000; // 5 seconds
+      
+      setPendingMoves(prev => prev.map(move => {
+        if (!move.confirmed && (now - move.timestamp) < recentThreshold) {
+          return { ...move, confirmed: true };
+        }
+        return move;
+      }));
+      
+      // Clean up old confirmed moves after a delay
+      setTimeout(() => {
+        setPendingMoves(prev => prev.filter(move => 
+          !move.confirmed || (now - move.timestamp) < 10000
+        ));
+      }, 1000);
+      
+      setLastServerMoveCount(currentMoveCount);
+    }
+  }, [gameState.moveHistory, lastServerMoveCount]);
+
+  // Always use optimistic moves for better responsiveness
+  const optimisticPossibleMoves = useMemo(() => {
+    try {
+      const allMoves = calculateOptimisticPossibleMoves(optimisticBoard, playerSide);
+      
+      // Filter out moves from pieces that are on cooldown
+      const filteredMoves: { [square: string]: string[] } = {};
+      const now = new Date();
+      
+      for (const [square, moves] of Object.entries(allMoves)) {
+        // Check if this piece is on cooldown for this player
+        const isOnCooldown = gameState.pieceCooldowns?.some(
+          (pc) => pc.square === square && pc.playerId === playerId && pc.availableAt > now
+        );
+        
+        if (!isOnCooldown) {
+          filteredMoves[square] = moves;
+        }
+      }
+      
+      return filteredMoves;
+    } catch (error) {
+      console.error('Error calculating optimistic moves:', error);
+      // Fallback to server moves on error
+      return serverPossibleMoves || {};
+    }
+  }, [optimisticBoard, playerSide, gameState.pieceCooldowns, playerId, serverPossibleMoves]);
+
+  // Use optimistic moves as the primary source for better responsiveness
+  const effectivePossibleMoves = useMemo(() => {
+    const hasOptimisticMoves = Object.keys(optimisticPossibleMoves).length > 0;
+    
+    if (hasOptimisticMoves) {
+      return optimisticPossibleMoves;
+    }
+    
+    // Fallback to server moves if optimistic calculation fails
+    return serverPossibleMoves || {};
+  }, [optimisticPossibleMoves, serverPossibleMoves]);
 
   // Get opponent info and calculate constants
   const opponent = gameState.players.find(p => p.id !== playerId);
@@ -147,7 +170,7 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
       .slice(0, maxMoves);
     
     // Add pending optimistic moves for this player to the count
-    const pendingMovesCount = pId === playerId ? pendingMoves.length : 0;
+    const pendingMovesCount = pId === playerId ? pendingMoves.filter(m => !m.confirmed).length : 0;
     
     const totalUsedMoves = recentMoves.length + pendingMovesCount;
     return Math.max(0, maxMoves - totalUsedMoves);
@@ -158,7 +181,7 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
     return getPlayerMovesLeft(playerId) > 0;
   }, [getPlayerMovesLeft]);
 
-  // Enhanced optimistic move with validation
+  // Enhanced optimistic move with immediate validation and responsiveness
   const addOptimisticMoveWithValidation = useCallback((from: SquareType, to: SquareType, promotion?: string): { success: boolean; moveId?: string; error?: string } => {
     // Pre-check: Can the player make this move?
     if (!canMakeMove(playerId)) {
@@ -168,32 +191,58 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
       };
     }
 
+    // Validate move on current optimistic board
+    const fromCoords = squareToCoords(from);
+    const toCoords = squareToCoords(to);
+    
+    if (!fromCoords || !toCoords) {
+      return { success: false, error: "Invalid square coordinates" };
+    }
+
+    const [fromRow, fromCol] = fromCoords;
+    const piece = optimisticBoard[fromRow]?.[fromCol];
+    
+    if (!piece) {
+      return { success: false, error: "No piece on selected square" };
+    }
+
+    // Fix: Use piece.color property instead of toUpperCase() on the piece object
+    const pieceColor = piece.color === 'w' ? "white" : "black";
+    if (pieceColor !== playerSide) {
+      return { success: false, error: "Cannot move opponent's piece" };
+    }
+
+    // Check if destination is in possible moves
+    const possibleMoves = effectivePossibleMoves[from];
+    if (!possibleMoves || !possibleMoves.includes(to)) {
+      return { success: false, error: "Invalid move for this piece" };
+    }
+
     const moveId = `${Date.now()}-${Math.random()}`;
     const newMove: OptimisticMove = {
       id: moveId,
       from,
       to,
       promotion,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      confirmed: false
     };
     
-    // Only add to pending moves - the useEffect will handle updating the optimistic board
+    // Add to pending moves immediately for instant UI response
     setPendingMoves(prev => [...prev, newMove]);
     
     return { success: true, moveId };
-  }, [canMakeMove, playerId]);
+  }, [canMakeMove, playerId, optimisticBoard, playerSide, effectivePossibleMoves]);
 
   // Remove an optimistic move and refresh board state
   const removeOptimisticMoveAndRefresh = useCallback((moveId: string) => {
     setPendingMoves(prev => prev.filter(move => move.id !== moveId));
-    // The useEffect will automatically update the optimistic board
   }, []);
 
   // Force refresh board state from server (for error recovery)
   const forceRefreshBoardState = useCallback(() => {
     setPendingMoves([]);
     setSelectedSquare(null);
-    // The useEffect will automatically update the optimistic board to match server state
   }, []);
 
   // Clear selection when game state changes
@@ -226,49 +275,63 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
     setPrevOpponentMoves(opponentMovesLeft);
   }, [opponentMovesLeft, prevOpponentMoves]);
 
-  // Initialize bullet reload times
+  // Track bullet reload times for player
   useEffect(() => {
-    if (!gameState.settings) return;
-    
-    const rateLimitMs = 10000;
-    const now = Date.now();
-    
-    // Calculate reload times for player
-    const playerMoves = gameState.playerMoveHistory
-      .filter(move => move.playerId === playerId)
-      .map(move => {
-        const timestamp = move.timestamp instanceof Date ? move.timestamp.getTime() : new Date(move.timestamp).getTime();
-        return {
-          timestamp: timestamp,
-          reloadTime: new Date(timestamp + rateLimitMs)
-        };
-      })
-      .filter(move => move.reloadTime.getTime() > now)
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, maxMoves)
-      .map(move => move.reloadTime);
-    
-    setPlayerBulletReloadTimes(playerMoves);
-    
-    // Calculate reload times for opponent
-    if (opponent) {
-      const opponentMoves = gameState.playerMoveHistory
-        .filter(move => move.playerId === opponent.id)
-        .map(move => {
-          const timestamp = move.timestamp instanceof Date ? move.timestamp.getTime() : new Date(move.timestamp).getTime();
-          return {
-            timestamp: timestamp,
-            reloadTime: new Date(timestamp + rateLimitMs)
-          };
-        })
-        .filter(move => move.reloadTime.getTime() > now)
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, maxMoves)
-        .map(move => move.reloadTime);
+    if (gameState.settings) {
+      const now = Date.now();
+      const rateLimitMs = 10000;
+      const maxMovesPerPeriod = gameState.settings.maxMovesPerPeriod;
       
-      setOpponentBulletReloadTimes(opponentMoves);
+      const recentMoves = gameState.playerMoveHistory
+        .filter(move => move.playerId === playerId)
+        .filter(move => {
+          const timestamp = move.timestamp instanceof Date ? move.timestamp.getTime() : new Date(move.timestamp).getTime();
+          return (now - timestamp) < rateLimitMs;
+        })
+        .sort((a, b) => {
+          const aTime = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+          const bTime = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, maxMovesPerPeriod);
+
+      const reloadTimes = recentMoves.map(move => {
+        const timestamp = move.timestamp instanceof Date ? move.timestamp.getTime() : new Date(move.timestamp).getTime();
+        return new Date(timestamp + rateLimitMs);
+      });
+
+      setPlayerBulletReloadTimes(reloadTimes);
     }
-  }, [gameState.playerMoveHistory, gameState.settings, playerId, opponent, maxMoves]);
+  }, [gameState.playerMoveHistory, gameState.settings, playerId]);
+
+  // Track bullet reload times for opponent
+  useEffect(() => {
+    if (gameState.settings && opponent) {
+      const now = Date.now();
+      const rateLimitMs = 10000;
+      const maxMovesPerPeriod = gameState.settings.maxMovesPerPeriod;
+      
+      const recentMoves = gameState.playerMoveHistory
+        .filter(move => move.playerId === opponent.id)
+        .filter(move => {
+          const timestamp = move.timestamp instanceof Date ? move.timestamp.getTime() : new Date(move.timestamp).getTime();
+          return (now - timestamp) < rateLimitMs;
+        })
+        .sort((a, b) => {
+          const aTime = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+          const bTime = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+          return bTime - aTime;
+        })
+        .slice(0, maxMovesPerPeriod);
+
+      const reloadTimes = recentMoves.map(move => {
+        const timestamp = move.timestamp instanceof Date ? move.timestamp.getTime() : new Date(move.timestamp).getTime();
+        return new Date(timestamp + rateLimitMs);
+      });
+
+      setOpponentBulletReloadTimes(reloadTimes);
+    }
+  }, [gameState.playerMoveHistory, gameState.settings, opponent]);
 
   const triggerWiggle = (message: string) => {
     setErrorMessage(message);
