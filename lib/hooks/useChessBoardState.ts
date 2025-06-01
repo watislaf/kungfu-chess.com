@@ -77,28 +77,38 @@ export function useChessBoardState({ gameState, playerId, movesLeft, playerSide,
     setOptimisticBoard(newOptimisticBoard);
   }, [gameState.board, pendingMoves, applyAllPendingMoves]);
 
-  // Smart move confirmation: only clear moves when we detect actual server move processing
+  // Smart move confirmation: clear optimistic moves when server responds with hit points attacks
   useEffect(() => {
     const currentMoveCount = gameState.moveHistory?.length || 0;
     
     if (currentMoveCount > lastServerMoveCount) {
-      // Server processed new moves - mark recent pending moves as confirmed
-      const now = Date.now();
-      const recentThreshold = 5000; // 5 seconds
+      const lastServerMove = gameState.moveHistory?.[gameState.moveHistory.length - 1];
       
-      setPendingMoves(prev => prev.map(move => {
-        if (!move.confirmed && (now - move.timestamp) < recentThreshold) {
-          return { ...move, confirmed: true };
-        }
-        return move;
-      }));
-      
-      // Clean up old confirmed moves after a delay
-      setTimeout(() => {
+      // Check if the last server move was a hit points attack (from === to)
+      if (lastServerMove && lastServerMove.from === lastServerMove.to && lastServerMove.attackTarget) {
+        // This was a hit points attack - clear any optimistic moves that match this attack
         setPendingMoves(prev => prev.filter(move => 
-          !move.confirmed || (now - move.timestamp) < 10000
+          !(move.from === lastServerMove.from && move.to === lastServerMove.attackTarget)
         ));
-      }, 1000);
+      } else {
+        // Normal move processing - mark recent pending moves as confirmed
+        const now = Date.now();
+        const recentThreshold = 5000; // 5 seconds
+        
+        setPendingMoves(prev => prev.map(move => {
+          if (!move.confirmed && (now - move.timestamp) < recentThreshold) {
+            return { ...move, confirmed: true };
+          }
+          return move;
+        }));
+        
+        // Clean up old confirmed moves after a delay
+        setTimeout(() => {
+          setPendingMoves(prev => prev.filter(move => 
+            !move.confirmed || (now - move.timestamp) < 10000
+          ));
+        }, 1000);
+      }
       
       setLastServerMoveCount(currentMoveCount);
     }
