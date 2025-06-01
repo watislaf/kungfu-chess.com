@@ -52,10 +52,11 @@ export class SocketController {
       socket.on('auth:login', async (credentials: LoginCredentials) => {
         try {
           console.log('🔐 Login attempt for:', credentials.username);
-          const result = await this.authService.login(credentials);
+          const result = await this.authService.login(credentials, socket.id);
           
-          if (result.success && result.player) {
-            // Associate socket with authenticated player
+          if (result.success && result.player && result.sessionToken) {
+            // Associate socket with authenticated player using session token
+            socket.data.sessionToken = result.sessionToken;
             socket.data.playerId = result.player.id;
             socket.data.player = result.player;
             console.log('✅ Login successful:', result.player.displayName);
@@ -74,10 +75,11 @@ export class SocketController {
       socket.on('auth:register', async (data: RegisterData) => {
         try {
           console.log('📝 Registration attempt for:', data.username);
-          const result = await this.authService.register(data);
+          const result = await this.authService.register(data, socket.id);
           
-          if (result.success && result.player) {
-            // Associate socket with new player
+          if (result.success && result.player && result.sessionToken) {
+            // Associate socket with new player using session token
+            socket.data.sessionToken = result.sessionToken;
             socket.data.playerId = result.player.id;
             socket.data.player = result.player;
             console.log('✅ Registration successful:', result.player.displayName);
@@ -96,6 +98,13 @@ export class SocketController {
       socket.on('auth:logout', () => {
         try {
           console.log('👋 Logout:', socket.data.player?.displayName || socket.id);
+          
+          // Invalidate session if it exists
+          if (socket.data.sessionToken) {
+            this.authService.invalidateSession(socket.data.sessionToken);
+          }
+          
+          delete socket.data.sessionToken;
           delete socket.data.playerId;
           delete socket.data.player;
           socket.emit('auth:logout-response', { success: true });
@@ -123,24 +132,29 @@ export class SocketController {
         }
       });
 
-      socket.on('auth:validate-session', async (data: { playerId: string }) => {
+      socket.on('auth:validate-session', async (data: { sessionToken: string }) => {
         try {
-          console.log('🔍 Session validation for player:', data.playerId);
-          const result = await this.authService.validateSession(data.playerId);
+          console.log('🔍 Session validation for token:', data.sessionToken?.substring(0, 8) + '...');
+          const result = await this.authService.validateSession(data.sessionToken, socket.id);
           
-          if (result.valid && result.player) {
+          if (result.valid && result.player && result.playerId) {
             // Associate socket with validated player
-            socket.data.playerId = result.player.id;
+            socket.data.sessionToken = data.sessionToken;
+            socket.data.playerId = result.playerId;
             socket.data.player = result.player;
             console.log('✅ Session validated for:', result.player.displayName);
           } else {
-            console.log('❌ Session validation failed for:', data.playerId);
+            console.log('❌ Session validation failed for token:', data.sessionToken?.substring(0, 8) + '...');
             // Clear any existing socket data
+            delete socket.data.sessionToken;
             delete socket.data.playerId;
             delete socket.data.player;
           }
           
-          socket.emit('auth:session-validation-response', result);
+          socket.emit('auth:session-validation-response', {
+            valid: result.valid,
+            player: result.player
+          });
         } catch (error) {
           console.error('Error during session validation:', error);
           socket.emit('auth:session-validation-response', { 
@@ -293,16 +307,22 @@ export class SocketController {
         
         const game = this.gameManager.getGame(gameId);
         if (game) {
-          const gameState = game.getState();
+          const sanitizedGameState = game.getSanitizedState();
+          
+          // Find the player's public ID in the sanitized state
+          const playerPublicId = result.isSpectator ? 
+            sanitizedGameState.spectators.find(s => s.socketId === socket.id)?.id :
+            sanitizedGameState.players.find(p => p.socketId === socket.id)?.id;
+          
           socket.emit('game-joined', { 
             success: true, 
-            gameState,
-            playerId: playerId,
+            gameState: sanitizedGameState,
+            playerId: playerPublicId || `player_unknown`, 
             isSpectator: result.isSpectator 
           });
           
-          // Notify all players in the game
-          socket.to(gameId).emit('game-updated', gameState);
+          // Notify all players in the game with sanitized state
+          socket.to(gameId).emit('game-updated', sanitizedGameState);
           
           // Update global stats safely
           try {

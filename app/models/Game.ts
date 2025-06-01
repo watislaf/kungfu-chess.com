@@ -378,6 +378,13 @@ export class Game {
       return false;
     }
     
+    // Additional validation: Don't allow settings changes if any player is ready
+    const anyPlayerReady = this.state.players.some(p => p.isReady);
+    if (anyPlayerReady) {
+      console.log('❌ setGameSettings: Cannot set settings, at least one player is ready');
+      return false;
+    }
+    
     console.log('✅ setGameSettings: Applying settings:', {
       old: this.state.settings,
       new: settings,
@@ -394,7 +401,8 @@ export class Game {
       return false;
     }
     
-    player.isReady = true;
+    // Toggle the ready state instead of only setting to true
+    player.isReady = !player.isReady;
     
     // Check if both players are ready
     this.state.bothPlayersReady = this.state.players.length === 2 && 
@@ -424,13 +432,70 @@ export class Game {
   }
 
   getState(): GameState & { board: (Piece | null)[][] } {
-    return { 
+    return {
       ...this.state,
-      settings: this.state.settings ? { ...this.state.settings } : undefined,
-      board: this.board.map(row => row.map(piece => piece ? { ...piece } : null)),
-      lastRandomPieceGeneration: this.lastRandomPieceGeneration,
-      pieceGenerationCooldowns: { ...this.state.pieceGenerationCooldowns },
+      board: this.board,
     };
+  }
+
+  // Get sanitized state for clients (doesn't expose actual player IDs)
+  getSanitizedState(): GameState & { board: (Piece | null)[][] } {
+    // Create sanitized players with public IDs instead of real player IDs
+    const sanitizedPlayers = this.state.players.map((player, index) => ({
+      ...player,
+      id: `player_${index + 1}`, // Use safe public identifiers
+      socketId: `socket_${index + 1}` // Don't expose real socket IDs either
+    }));
+
+    // Create sanitized spectators
+    const sanitizedSpectators = this.state.spectators.map((spectator, index) => ({
+      ...spectator,
+      id: `spectator_${index + 1}`,
+      socketId: `spectator_socket_${index + 1}`
+    }));
+
+    // Sanitize other ID references in the state
+    const sanitizedState = {
+      ...this.state,
+      players: sanitizedPlayers,
+      spectators: sanitizedSpectators,
+      // Sanitize current turn if it exists
+      currentTurn: this.state.currentTurn ? 
+        this.findPlayerPublicId(this.state.currentTurn) : undefined,
+      // Sanitize winner if it exists
+      winner: this.state.winner ? 
+        this.findPlayerPublicId(this.state.winner) : undefined,
+      // Sanitize pending promotion
+      pendingPromotion: this.state.pendingPromotion ? {
+        ...this.state.pendingPromotion,
+        playerId: this.findPlayerPublicId(this.state.pendingPromotion.playerId)
+      } : undefined,
+      board: this.board,
+    };
+
+    return sanitizedState;
+  }
+
+  // Helper method to map real player ID to public ID
+  private findPlayerPublicId(realPlayerId: string): string {
+    const playerIndex = this.state.players.findIndex(p => p.id === realPlayerId);
+    return playerIndex >= 0 ? `player_${playerIndex + 1}` : realPlayerId;
+  }
+
+  // Helper method to map public ID back to real player ID (for server-side operations)
+  getRealPlayerId(publicPlayerId: string): string | null {
+    const match = publicPlayerId.match(/^player_(\d+)$/);
+    if (match) {
+      const index = parseInt(match[1]) - 1;
+      return this.state.players[index]?.id || null;
+    }
+    
+    // If it's already a real player ID (for backward compatibility), return it
+    if (this.state.players.some(p => p.id === publicPlayerId)) {
+      return publicPlayerId;
+    }
+    
+    return null;
   }
 
   getPlayerCount(): number {

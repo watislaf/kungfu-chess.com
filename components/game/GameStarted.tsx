@@ -45,7 +45,16 @@ export function GameStarted({
   const currentPlayer = gameState.players.find((p) => p.id === playerId);
 
   // Debug logging for player identification issues
-  if (!currentPlayer && !isSpectator) {
+  if (!currentPlayer && !isSpectator && playerId === 'player_unknown') {
+    console.error('🔍 [GameStarted] Critical: Player ID is unknown, suggesting a connection issue:', {
+      playerId,
+      gameStatePlayers: gameState.players.map(p => ({ id: p.id, name: p.name, side: p.side })),
+      isSpectator,
+      isConnected,
+      gameId,
+      suggestion: 'Try refreshing the page or rejoining the game'
+    });
+  } else if (!currentPlayer && !isSpectator) {
     console.warn('🔍 [GameStarted] Player not found in game state:', {
       playerId,
       gameStatePlayers: gameState.players.map(p => ({ id: p.id, name: p.name, side: p.side })),
@@ -74,6 +83,34 @@ export function GameStarted({
         playerSide = "black";
       }
     }
+  }
+
+  // If player is 'player_unknown', show a helpful error message
+  if (playerId === 'player_unknown' && !isSpectator) {
+    return (
+      <div className="space-y-2 sm:space-y-6 animate-in fade-in duration-500">
+        <div className="bg-red-900/20 border border-red-900/50 rounded-lg p-4 text-center">
+          <h3 className="text-red-400 font-bold mb-2">Connection Issue Detected</h3>
+          <p className="text-red-300 text-sm mb-4">
+            Unable to identify your player in this game. This usually indicates a connection problem.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium"
+            >
+              Refresh Page
+            </button>
+            <button
+              onClick={onBackToHome}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm font-medium"
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Request possible moves when component mounts and periodically

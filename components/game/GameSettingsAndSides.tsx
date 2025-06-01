@@ -43,8 +43,9 @@ export function GameSettingsAndSides({
   const otherPlayer = gameState.players.find((p) => p.id !== playerId);
   const canSwitch = !gameState.players.some((p) => p.isReady) && !isSpectator;
   const isReady = currentPlayer?.isReady || false;
+  const anyPlayerReady = gameState.players.some((p) => p.isReady);
   const showSettings = gameState.status !== "playing";
-  const canEditSettings = showSettings && !isSpectator && !isReady;
+  const canEditSettings = showSettings && !isSpectator && !anyPlayerReady;
 
   return (
     <Card>
@@ -98,15 +99,18 @@ export function GameSettingsAndSides({
         )}
 
         {/* Status Messages */}
-        {!isSpectator && showSettings && !isReady && (
+        {!isSpectator && showSettings && canEditSettings && (
           <p className="text-xs text-muted-foreground text-center">
             Settings auto-save as you type
           </p>
         )}
 
-        {!isSpectator && showSettings && isReady && (
+        {!isSpectator && showSettings && anyPlayerReady && (
           <p className="text-xs text-muted-foreground text-center">
-            Settings locked - you are ready to play
+            {isReady 
+              ? "Settings locked - you are ready to play" 
+              : "Settings locked - opponent is ready to play"
+            }
           </p>
         )}
       </CardContent>

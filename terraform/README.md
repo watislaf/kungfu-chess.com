@@ -58,7 +58,7 @@ aws_region = "us-east-1"
 public_key = "ssh-rsa AAAAB3NzaC1yc2E... (content of ~/.ssh/chess-app-key.pub)"
 
 # Application Repository
-github_repo   = "https://github.com/your-username/rapid-chess-online.git"
+github_repo   = "https://github.com/watislaf/kungfu-chess.com.git"
 github_branch = "main"
 
 # Optional: Custom domain

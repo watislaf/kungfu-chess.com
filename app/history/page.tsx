@@ -46,7 +46,7 @@ export default function GameHistoryPage() {
   };
 
   const openGitHubRepo = () => {
-    window.open('https://github.com/your-username/rapid-chess-online', '_blank');
+    window.open('https://github.com/watislaf/kungfu-chess.com', '_blank');
   };
 
   if (!auth.isAuthenticated) {
