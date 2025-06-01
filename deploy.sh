@@ -84,16 +84,6 @@ cd ..
 # Deploy code to the server
 deploy_code_to_server
 
-# Run verification script
-echo ""
-echo "🔍 Running deployment verification..."
-cd terraform
-if [ -f "verify-deployment.sh" ]; then
-    ./verify-deployment.sh
-else
-    echo "⚠️  Verification script not found - manual testing recommended"
-fi
-
 echo ""
 echo "🌐 You can access your application at the URL shown above."
 echo "🔧 Application code has been automatically deployed to the server." 

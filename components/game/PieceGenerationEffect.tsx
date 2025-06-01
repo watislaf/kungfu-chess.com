@@ -205,7 +205,7 @@ export function PieceGenerationEffect({ square, playerSide, onComplete }: PieceG
               transform: 'translate(-50%, -50%)',
               background: 'conic-gradient(from 0deg, transparent, gold, transparent, gold, transparent)',
               borderRadius: '50%',
-              animationDuration: '1.5s',
+              animationDuration: '1s',
               zIndex: 10,
             }}
           />
