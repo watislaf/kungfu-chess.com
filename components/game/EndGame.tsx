@@ -8,10 +8,11 @@ import { GameState } from "@/app/models/Game";
 interface EndGameProps {
   gameState: GameState;
   playerId: string;
-  onNewGame: () => void;
+  onRestartGame?: () => void;
+  onBackToHome?: () => void;
 }
 
-export function EndGame({ gameState, playerId, onNewGame }: EndGameProps) {
+export function EndGame({ gameState, playerId, onRestartGame, onBackToHome }: EndGameProps) {
   const player = gameState.players.find(p => p.id === playerId);
   const opponent = gameState.players.find(p => p.id !== playerId);
   const isWinner = gameState.winner === playerId;
@@ -29,6 +30,8 @@ export function EndGame({ gameState, playerId, onNewGame }: EndGameProps) {
         return 'Draw!';
       case 'resignation':
         return 'Resignation!';
+      case 'disconnection':
+        return 'Player disconnected!';
       default:
         return 'Game over!';
     }
@@ -42,13 +45,25 @@ export function EndGame({ gameState, playerId, onNewGame }: EndGameProps) {
   };
 
   const getResultColor = () => {
-    if (isDraw) return "bg-yellow-100 border-yellow-300";
-    return isWinner ? "bg-green-100 border-green-300" : "bg-red-100 border-red-300";
+    if (isDraw) return "bg-yellow-100 border-yellow-500 text-yellow-900";
+    return isWinner ? "bg-green-100 border-green-500 text-green-900" : "bg-red-100 border-red-500 text-red-900";
   };
 
   const getResultIcon = () => {
     if (isDraw) return "🤝";
     return isWinner ? "🎉" : "😔";
+  };
+
+  const handleNewGame = () => {
+    if (onRestartGame) {
+      onRestartGame();
+    }
+  };
+
+  const handleBackToHome = () => {
+    if (onBackToHome) {
+      onBackToHome();
+    }
   };
 
   return (
@@ -59,22 +74,37 @@ export function EndGame({ gameState, playerId, onNewGame }: EndGameProps) {
           <CardTitle className="text-2xl">
             {getResultText()}
           </CardTitle>
-          <Badge variant="outline" className="mx-auto">
+          <Badge 
+            variant="outline" 
+            className={`mx-auto ${
+              isDraw 
+                ? "border-yellow-600 text-yellow-800 bg-yellow-50" 
+                : isWinner 
+                ? "border-green-600 text-green-800 bg-green-50" 
+                : "border-red-600 text-red-800 bg-red-50"
+            }`}
+          >
             {getEndReasonText()}
           </Badge>
         </CardHeader>
         
         <CardContent className="space-y-4">
           {/* Game Summary */}
-          <div className="bg-white/50 rounded-lg p-4 space-y-2">
-            <div className="text-sm text-gray-600 text-center">Game Summary</div>
+          <div className={`rounded-lg p-4 space-y-2 border ${
+            isDraw 
+              ? "bg-yellow-50 border-yellow-300 text-yellow-900" 
+              : isWinner 
+              ? "bg-green-50 border-green-300 text-green-900" 
+              : "bg-red-50 border-red-300 text-red-900"
+          }`}>
+            <div className="text-sm text-center font-medium opacity-90">Game Summary</div>
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Badge variant={player?.side === "white" ? "default" : "secondary"}>
                   {player?.side === "white" ? "♔" : "♚"} You
                 </Badge>
                 {player?.name && (
-                  <span className="text-sm text-gray-600">({player.name})</span>
+                  <span className="text-sm opacity-80">({player.name})</span>
                 )}
               </div>
               <div className="text-lg font-bold">
@@ -88,7 +118,7 @@ export function EndGame({ gameState, playerId, onNewGame }: EndGameProps) {
                   {opponent?.side === "white" ? "♔" : "♚"} Opponent
                 </Badge>
                 {opponent?.name && (
-                  <span className="text-sm text-gray-600">({opponent.name})</span>
+                  <span className="text-sm opacity-80">({opponent.name})</span>
                 )}
               </div>
               <div className="text-lg font-bold">
@@ -96,7 +126,7 @@ export function EndGame({ gameState, playerId, onNewGame }: EndGameProps) {
               </div>
             </div>
             
-            <div className="text-xs text-gray-500 text-center pt-2">
+            <div className="text-xs text-center pt-2 opacity-75">
               Moves played: {gameState.moveHistory.length}
             </div>
           </div>
@@ -104,14 +134,14 @@ export function EndGame({ gameState, playerId, onNewGame }: EndGameProps) {
           {/* Actions */}
           <div className="flex gap-2">
             <Button
-              onClick={onNewGame}
+              onClick={handleNewGame}
               className="flex-1"
               size="lg"
             >
               🔄 New Game
             </Button>
             <Button
-              onClick={() => window.location.href = '/'}
+              onClick={handleBackToHome}
               variant="outline"
               className="flex-1"
               size="lg"

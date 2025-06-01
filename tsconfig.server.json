@@ -12,7 +12,11 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "declaration": false,
-    "removeComments": true
+    "removeComments": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
   },
   "include": [
     "server.ts", 

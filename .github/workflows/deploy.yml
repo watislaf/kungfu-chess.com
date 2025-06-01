@@ -1,0 +1,104 @@
+name: Deploy Kung Fu Chess Online
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  NODE_VERSION: '18'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🔄 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: |
+        npm ci
+        
+    - name: 🔧 Build application
+      run: |
+        npm run build
+        npm run build:server
+        
+    - name: 🏗️ Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.0
+        
+    - name: ☁️ Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: 🔐 Setup SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H $(echo "${{ secrets.SERVER_IP }}" 2>/dev/null || echo "github.com") >> ~/.ssh/known_hosts 2>/dev/null || true
+        
+    - name: 🚀 Run deployment script
+      run: |
+        chmod +x ./deploy.sh
+        ./deploy.sh
+      env:
+        TF_VAR_project_name: ${{ secrets.TF_VAR_PROJECT_NAME || 'rapid-chess-online' }}
+        TF_VAR_environment: ${{ secrets.TF_VAR_ENVIRONMENT || 'production' }}
+        TF_VAR_aws_region: ${{ env.AWS_REGION }}
+        TF_VAR_instance_type: ${{ secrets.TF_VAR_INSTANCE_TYPE || 't3.micro' }}
+        TF_VAR_app_port: ${{ secrets.TF_VAR_APP_PORT || '3001' }}
+        TF_VAR_domain_name: ${{ secrets.TF_VAR_DOMAIN_NAME || '' }}
+        TF_VAR_ssl_certificate_arn: ${{ secrets.TF_VAR_SSL_CERTIFICATE_ARN || '' }}
+        TF_VAR_github_repo: ${{ github.repository }}
+        TF_VAR_github_branch: ${{ github.ref_name }}
+        TF_VAR_public_key: ${{ secrets.TF_VAR_PUBLIC_KEY }}
+        
+    - name: 🧪 Post-deployment verification
+      run: |
+        echo "🎯 Deployment completed successfully!"
+        echo "📊 Checking deployment status..."
+        cd terraform
+        terraform output
+        
+    - name: 📝 Deployment summary
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ✅ Successfully deployed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🌐 Application URLs" >> $GITHUB_STEP_SUMMARY
+        cd terraform
+        INSTANCE_IP=$(terraform output -raw instance_public_ip 2>/dev/null || echo "N/A")
+        DOMAIN_NAME=$(terraform output -raw domain_name 2>/dev/null || echo "")
+        echo "- **Direct Access**: http://$INSTANCE_IP:3001" >> $GITHUB_STEP_SUMMARY
+        if [ ! -z "$DOMAIN_NAME" ] && [ "$DOMAIN_NAME" != "null" ]; then
+          echo "- **Domain**: https://$DOMAIN_NAME" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+    - name: 🔔 Notify on failure
+      if: failure()
+      run: |
+        echo "## ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ❌ Deployment failed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Please check the workflow logs for more details." >> $GITHUB_STEP_SUMMARY 

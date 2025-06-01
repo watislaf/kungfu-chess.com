@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Settings, Clock, Zap, HelpCircle } from "lucide-react";
+import { Settings, Clock, Zap, HelpCircle, Shuffle, Heart } from "lucide-react";
 import { GameSettings } from "@/app/models/Game";
 
 interface GameSettingsFormProps {
@@ -33,6 +33,12 @@ export function GameSettingsForm({
   const [pieceCooldownSeconds, setPieceCooldownSeconds] = useState(
     currentSettings?.pieceCooldownSeconds || 5
   );
+  const [enableRandomPieceGeneration, setEnableRandomPieceGeneration] = useState(
+    currentSettings?.enableRandomPieceGeneration || false
+  );
+  const [enableHitPointsSystem, setEnableHitPointsSystem] = useState(
+    currentSettings?.enableHitPointsSystem || false
+  );
 
   // Debounced auto-save
   const debouncedSave = useCallback(
@@ -51,20 +57,51 @@ export function GameSettingsForm({
   // Auto-save when settings change
   useEffect(() => {
     if (!isSpectator) {
-      debouncedSave({
+      const newSettings = {
         maxMovesPerPeriod,
         pieceCooldownSeconds,
-      });
+        enableRandomPieceGeneration,
+        enableHitPointsSystem,
+      };
+      console.log('🔧 GameSettingsForm - Auto-saving settings:', newSettings);
+      debouncedSave(newSettings);
     }
-  }, [maxMovesPerPeriod, pieceCooldownSeconds, debouncedSave, isSpectator]);
+  }, [maxMovesPerPeriod, pieceCooldownSeconds, enableRandomPieceGeneration, enableHitPointsSystem, debouncedSave, isSpectator]);
 
   // Update local state when currentSettings change (from other player)
   useEffect(() => {
     if (currentSettings) {
-      setMaxMovesPerPeriod(currentSettings.maxMovesPerPeriod);
-      setPieceCooldownSeconds(currentSettings.pieceCooldownSeconds);
+      console.log('🔄 GameSettingsForm - External settings update:', {
+        currentSettings,
+        localValues: {
+          maxMovesPerPeriod,
+          pieceCooldownSeconds,
+          enableRandomPieceGeneration,
+          enableHitPointsSystem
+        }
+      });
+      
+      if (currentSettings.maxMovesPerPeriod !== maxMovesPerPeriod) {
+        console.log('📊 GameSettingsForm - Updating maxMovesPerPeriod:', currentSettings.maxMovesPerPeriod);
+        setMaxMovesPerPeriod(currentSettings.maxMovesPerPeriod);
+      }
+      
+      if (currentSettings.pieceCooldownSeconds !== pieceCooldownSeconds) {
+        console.log('⏰ GameSettingsForm - Updating pieceCooldownSeconds:', currentSettings.pieceCooldownSeconds);
+        setPieceCooldownSeconds(currentSettings.pieceCooldownSeconds);
+      }
+      
+      if (currentSettings.enableRandomPieceGeneration !== enableRandomPieceGeneration) {
+        console.log('🎲 GameSettingsForm - Updating enableRandomPieceGeneration:', currentSettings.enableRandomPieceGeneration);
+        setEnableRandomPieceGeneration(currentSettings.enableRandomPieceGeneration);
+      }
+      
+      if (currentSettings.enableHitPointsSystem !== enableHitPointsSystem) {
+        console.log('❤️ GameSettingsForm - Updating enableHitPointsSystem:', currentSettings.enableHitPointsSystem);
+        setEnableHitPointsSystem(currentSettings.enableHitPointsSystem);
+      }
     }
-  }, [currentSettings]);
+  }, [currentSettings, maxMovesPerPeriod, pieceCooldownSeconds, enableRandomPieceGeneration, enableHitPointsSystem]);
 
   if (isSpectator) {
     return (
@@ -98,6 +135,16 @@ export function GameSettingsForm({
                       after moving
                     </li>
                     <li>• Standard chess rules apply for valid moves</li>
+                    {currentSettings?.enableRandomPieceGeneration && (
+                      <li className="text-purple-600">
+                        • Random pieces spawn on empty rook squares every few seconds
+                      </li>
+                    )}
+                    {currentSettings?.enableHitPointsSystem && (
+                      <li className="text-red-600">
+                        • Pieces have 3 hit points - must be attacked 3 times to be captured
+                      </li>
+                    )}
                   </ul>
                 </div>
               </DialogContent>
@@ -105,6 +152,7 @@ export function GameSettingsForm({
           </CardTitle>
         </CardHeader>
         <CardContent className="px-2 sm:px-4 pb-2 sm:pb-3">
+          <div className="space-y-2">
           <div className="flex gap-2 sm:gap-4">
             <div className="flex items-center gap-1">
               <Zap className="h-3 w-3 text-yellow-500" />
@@ -118,6 +166,29 @@ export function GameSettingsForm({
                 {currentSettings?.pieceCooldownSeconds || 5}s
               </Badge>
             </div>
+            </div>
+            
+            {/* Special modes indicators */}
+            {(currentSettings?.enableRandomPieceGeneration || currentSettings?.enableHitPointsSystem) && (
+              <div className="flex gap-2 sm:gap-4">
+                {currentSettings?.enableRandomPieceGeneration && (
+                  <div className="flex items-center gap-1">
+                    <Shuffle className="h-3 w-3 text-purple-500" />
+                    <Badge variant="outline" className="text-xs px-1 py-0 text-purple-600">
+                      Random Pieces
+                    </Badge>
+                  </div>
+                )}
+                {currentSettings?.enableHitPointsSystem && (
+                  <div className="flex items-center gap-1">
+                    <Heart className="h-3 w-3 text-red-500" />
+                    <Badge variant="outline" className="text-xs px-1 py-0 text-red-600">
+                      3 HP System
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -151,6 +222,16 @@ export function GameSettingsForm({
                     moving
                   </li>
                   <li>• Standard chess rules apply for valid moves</li>
+                  {enableRandomPieceGeneration && (
+                    <li className="text-purple-600">
+                      • Random pieces spawn on empty rook squares every few seconds
+                    </li>
+                  )}
+                  {enableHitPointsSystem && (
+                    <li className="text-red-600">
+                      • Pieces have 3 hit points - must be attacked 3 times to be captured
+                    </li>
+                  )}
                 </ul>
               </div>
             </DialogContent>
@@ -199,6 +280,43 @@ export function GameSettingsForm({
               }
               className="text-xs h-7 rounded-md"
             />
+          </div>
+        </div>
+
+        {/* Special Game Modes */}
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="randomPieces"
+              checked={enableRandomPieceGeneration}
+              onChange={(e) => {
+                console.log('🎲 GameSettingsForm - Random piece generation toggled:', e.target.checked);
+                setEnableRandomPieceGeneration(e.target.checked);
+              }}
+              className="h-4 w-4 rounded border-2 border-muted-foreground text-primary focus:ring-2 focus:ring-primary"
+            />
+            <Label htmlFor="randomPieces" className="text-xs flex items-center gap-1 cursor-pointer">
+              <Shuffle className="h-3 w-3 text-purple-500" />
+              <span>Random Piece Generation</span>
+            </Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="hitPoints"
+              checked={enableHitPointsSystem}
+              onChange={(e) => {
+                console.log('❤️ GameSettingsForm - Hit points system toggled:', e.target.checked);
+                setEnableHitPointsSystem(e.target.checked);
+              }}
+              className="h-4 w-4 rounded border-2 border-muted-foreground text-primary focus:ring-2 focus:ring-primary"
+            />
+            <Label htmlFor="hitPoints" className="text-xs flex items-center gap-1 cursor-pointer">
+              <Heart className="h-3 w-3 text-red-500" />
+              <span>Hit Points System (3 HP)</span>
+            </Label>
           </div>
         </div>
 

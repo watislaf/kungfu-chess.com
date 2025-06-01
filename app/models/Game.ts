@@ -18,6 +18,8 @@ export interface Spectator {
 export interface GameSettings {
   maxMovesPerPeriod: number; // N moves per 10 seconds
   pieceCooldownSeconds: number; // Y seconds cooldown per piece
+  enableRandomPieceGeneration: boolean; // Generate random pieces on empty rook squares
+  enableHitPointsSystem: boolean; // Pieces have 3 hit points
 }
 
 export interface PieceCooldown {
@@ -42,11 +44,11 @@ export interface GameState {
   settings?: GameSettings;
   // Chess-specific state
   fen?: string;
-  moveHistory: { from: Square, to: Square, piece: Piece, captured?: Piece }[];
+  moveHistory: { from: Square, to: Square, piece: Piece, captured?: Piece, attackTarget?: Square }[];
   pieceCooldowns: PieceCooldown[];
   playerMoveHistory: PlayerMoveHistory[];
   winner?: string;
-  gameEndReason?: 'checkmate' | 'stalemate' | 'draw' | 'resignation' | 'king-captured';
+  gameEndReason?: 'checkmate' | 'stalemate' | 'draw' | 'resignation' | 'king-captured' | 'disconnection';
   // New chess features
   castlingRights: {
     whiteKingSide: boolean;
@@ -59,12 +61,21 @@ export interface GameState {
     from: Square;
     to: Square;
   };
+  check?: {
+    whiteInCheck: boolean;
+    blackInCheck: boolean;
+    checkingPieces: { square: Square; piece: Piece }[];
+  };
+  lastRandomPieceGeneration?: Date;
+  // Per-square piece generation cooldowns
+  pieceGenerationCooldowns: { [square: string]: Date };
 }
 
 // Piece type
 interface Piece {
   type: 'p' | 'r' | 'n' | 'b' | 'q' | 'k';
   color: 'w' | 'b';
+  hitPoints?: number; // For hit points system (3 HP when enabled)
 }
 
 // Helper: create initial board
@@ -77,14 +88,20 @@ function createInitialBoard(): (Piece | null)[][] {
     empty[6][i] = { type: 'p', color: 'w' };
   }
   // Place rooks
-  empty[0][0] = empty[0][7] = { type: 'r', color: 'b' };
-  empty[7][0] = empty[7][7] = { type: 'r', color: 'w' };
+  empty[0][0] = { type: 'r', color: 'b' };
+  empty[0][7] = { type: 'r', color: 'b' };
+  empty[7][0] = { type: 'r', color: 'w' };
+  empty[7][7] = { type: 'r', color: 'w' };
   // Place knights
-  empty[0][1] = empty[0][6] = { type: 'n', color: 'b' };
-  empty[7][1] = empty[7][6] = { type: 'n', color: 'w' };
+  empty[0][1] = { type: 'n', color: 'b' };
+  empty[0][6] = { type: 'n', color: 'b' };
+  empty[7][1] = { type: 'n', color: 'w' };
+  empty[7][6] = { type: 'n', color: 'w' };
   // Place bishops
-  empty[0][2] = empty[0][5] = { type: 'b', color: 'b' };
-  empty[7][2] = empty[7][5] = { type: 'b', color: 'w' };
+  empty[0][2] = { type: 'b', color: 'b' };
+  empty[0][5] = { type: 'b', color: 'b' };
+  empty[7][2] = { type: 'b', color: 'w' };
+  empty[7][5] = { type: 'b', color: 'w' };
   // Place queens
   empty[0][3] = { type: 'q', color: 'b' };
   empty[7][3] = { type: 'q', color: 'w' };
@@ -109,6 +126,8 @@ function coordsToSquare(row: number, col: number): Square {
 export class Game {
   private state: GameState;
   private board: (Piece | null)[][];
+  private lastRandomPieceGeneration: Date;
+  private pieceGenerationCounter: number = 0; // Track piece generation sequence
 
   constructor(id: string) {
     this.state = {
@@ -121,6 +140,8 @@ export class Game {
       settings: {
         maxMovesPerPeriod: 3,
         pieceCooldownSeconds: 5,
+        enableRandomPieceGeneration: false,
+        enableHitPointsSystem: false,
       },
       moveHistory: [],
       pieceCooldowns: [],
@@ -131,45 +152,120 @@ export class Game {
         blackKingSide: true,
         blackQueenSide: true,
       },
+      pieceGenerationCooldowns: {},
     };
     this.board = createInitialBoard();
+    this.lastRandomPieceGeneration = new Date();
     this.state.fen = undefined; // Not used
+    // Initialize check status
+    this.updateCheckStatus();
   }
 
-  addPlayer(player: Omit<Player, 'side' | 'isReady'>): { success: boolean; isSpectator: boolean } {
-    if (this.state.players.length >= 2) {
-      const spectator: Spectator = {
-        id: player.id,
-        socketId: player.socketId,
-        name: player.name,
-        joinedAt: new Date(),
+  addPlayer(player: Omit<Player, 'side' | 'isReady'>, options?: { isMatchmaking?: boolean }): { success: boolean; isSpectator: boolean; message?: string } {
+    try {
+      // Validate input parameters
+      if (!player || !player.id || !player.socketId) {
+        console.error('❌ Invalid player data provided to addPlayer:', player);
+        return { 
+          success: false, 
+          isSpectator: false, 
+          message: 'Invalid player data provided' 
+        };
+      }
+
+      // Only check for duplicates if this is NOT a matchmaking operation
+      if (!options?.isMatchmaking) {
+        // Check if player is already in the game (either as player or spectator)
+        const isAlreadyPlayer = this.state.players.some(p => p.id === player.id);
+        const isAlreadySpectator = this.state.spectators.some(s => s.id === player.id);
+        
+        if (isAlreadyPlayer || isAlreadySpectator) {
+          console.log(`❌ Player ${player.name} (${player.id}) is already in game ${this.state.id}`);
+          return { 
+            success: false, 
+            isSpectator: false, 
+            message: 'You are already in this game room. You cannot join the same room twice.' 
+          };
+        }
+      } else {
+        console.log(`🎯 [Matchmaking] Allowing rejoin for player ${player.name} (${player.id}) to game ${this.state.id}`);
+      }
+      
+      if (this.state.players.length >= 2) {
+        try {
+          const spectator: Spectator = {
+            id: player.id,
+            socketId: player.socketId,
+            name: player.name,
+            joinedAt: new Date(),
+          };
+          this.state.spectators.push(spectator);
+          console.log(`✅ Player ${player.name} (${player.id}) joined as spectator in game ${this.state.id}`);
+          return { success: true, isSpectator: true };
+        } catch (spectatorError) {
+          console.error('❌ Error adding spectator:', spectatorError);
+          return { 
+            success: false, 
+            isSpectator: false, 
+            message: 'Failed to join as spectator due to server error' 
+          };
+        }
+      }
+      
+      try {
+        // Assign side based on player count
+        const side = this.state.players.length === 0 ? 'white' : 'black';
+        
+        const newPlayer: Player = {
+          ...player,
+          side,
+          isReady: false,
+        };
+        
+        this.state.players.push(newPlayer);
+        
+        // Update status when both players are present - go to settings phase
+        if (this.state.players.length === 2) {
+          this.state.status = 'settings';
+        }
+        
+        console.log(`✅ Player ${player.name} (${player.id}) joined as ${side} player in game ${this.state.id}`);
+        return { success: true, isSpectator: false };
+      } catch (playerError) {
+        console.error('❌ Error adding player:', playerError);
+        return { 
+          success: false, 
+          isSpectator: false, 
+          message: 'Failed to join as player due to server error' 
+        };
+      }
+    } catch (error) {
+      console.error('❌ Critical error in Game.addPlayer:', error);
+      return { 
+        success: false, 
+        isSpectator: false, 
+        message: 'A critical server error occurred while adding player' 
       };
-      this.state.spectators.push(spectator);
-      return { success: true, isSpectator: true };
     }
-    
-    // Assign side based on player count
-    const side = this.state.players.length === 0 ? 'white' : 'black';
-    
-    const newPlayer: Player = {
-      ...player,
-      side,
-      isReady: false,
-    };
-    
-    this.state.players.push(newPlayer);
-    
-    // Update status when both players are present - go to settings phase
-    if (this.state.players.length === 2) {
-      this.state.status = 'settings';
-    }
-    
-    return { success: true, isSpectator: false };
   }
 
   removePlayer(playerId: string): void {
+    const player = this.state.players.find(p => p.id === playerId);
+    const wasInActiveGame = this.state.status === 'playing' && this.state.players.length === 2;
+    
     this.state.players = this.state.players.filter(p => p.id !== playerId);
     this.state.spectators = this.state.spectators.filter(s => s.id !== playerId);
+    
+    // If a player leaves during an active game, end the game with disconnection
+    if (wasInActiveGame && player) {
+      const remainingPlayer = this.state.players[0];
+      if (remainingPlayer) {
+        this.state.status = 'finished';
+        this.state.winner = remainingPlayer.id;
+        this.state.gameEndReason = 'disconnection';
+        return; // Don't continue with normal waiting room logic
+      }
+    }
     
     if (this.state.players.length < 2) {
       this.state.status = 'waiting';
@@ -203,8 +299,15 @@ export class Game {
 
   setGameSettings(settings: GameSettings): boolean {
     if (this.state.status !== 'settings') {
+      console.log('❌ setGameSettings: Cannot set settings, game status is:', this.state.status);
       return false;
     }
+    
+    console.log('✅ setGameSettings: Applying settings:', {
+      old: this.state.settings,
+      new: settings,
+      status: this.state.status
+    });
     
     this.state.settings = settings;
     return true;
@@ -227,6 +330,11 @@ export class Game {
       this.state.fen = undefined; // Not used
       // No specific turn in this variant - both players can move
       this.state.currentTurn = undefined;
+      
+      // Initialize hit points if system is enabled
+      if (this.state.settings.enableHitPointsSystem) {
+        this.initializeHitPoints();
+      }
     }
     
     return true;
@@ -245,6 +353,8 @@ export class Game {
       ...this.state,
       settings: this.state.settings ? { ...this.state.settings } : undefined,
       board: this.board.map(row => row.map(piece => piece ? { ...piece } : null)),
+      lastRandomPieceGeneration: this.lastRandomPieceGeneration,
+      pieceGenerationCooldowns: { ...this.state.pieceGenerationCooldowns },
     };
   }
 
@@ -264,10 +374,71 @@ export class Game {
     return this.state.players.find(p => p.side === side);
   }
 
+  resetGame(): void {
+    // Reset the game state to initial conditions
+    this.state.status = 'waiting';
+    this.state.bothPlayersReady = false;
+    this.state.moveHistory = [];
+    this.state.pieceCooldowns = [];
+    this.state.playerMoveHistory = [];
+    this.state.winner = undefined;
+    this.state.gameEndReason = undefined;
+    this.state.check = undefined;
+    this.state.pendingPromotion = undefined;
+    this.state.pieceGenerationCooldowns = {};
+    
+    // Reset player ready states
+    this.state.players.forEach(player => {
+      player.isReady = false;
+    });
+    
+    // Reset castling rights
+    this.state.castlingRights = {
+      whiteKingSide: true,
+      whiteQueenSide: true,
+      blackKingSide: true,
+      blackQueenSide: true,
+    };
+    
+    // Reset board to initial position
+    this.board = createInitialBoard();
+    this.lastRandomPieceGeneration = new Date();
+    
+    // Reset piece generation sequence counter
+    this.pieceGenerationCounter = 0;
+    
+    // Update check status
+    this.updateCheckStatus();
+  }
+
+  surrender(playerId: string): { success: boolean; message?: string } {
+    if (this.state.status !== 'playing') {
+      return { success: false, message: 'Can only surrender during active gameplay' };
+    }
+
+    const player = this.state.players.find(p => p.id === playerId);
+    if (!player) {
+      return { success: false, message: 'Player not found' };
+    }
+
+    // Find the opponent
+    const opponent = this.state.players.find(p => p.id !== playerId);
+    if (!opponent) {
+      return { success: false, message: 'No opponent found' };
+    }
+
+    // End the game with surrender
+    this.state.status = 'finished';
+    this.state.winner = opponent.id;
+    this.state.gameEndReason = 'resignation';
+
+    return { success: true };
+  }
+
   makeMove(playerId: string, from: Square, to: Square, promotion?: string): { 
     success: boolean; 
     message?: string; 
-    move?: { from: Square, to: Square, piece: Piece, captured?: Piece };
+    move?: { from: Square, to: Square, piece: Piece, captured?: Piece, attackTarget?: Square };
     needsPromotion?: boolean;
   } {
     if (this.state.status !== 'playing' || !this.state.settings) {
@@ -328,12 +499,41 @@ export class Game {
           // En passant capture confirmed
           enPassantCapture = this.board[lastToRow][lastToCol] || undefined;
           this.board[lastToRow][lastToCol] = null; // Remove the captured pawn
+          
+          // Check if we emptied a rook square during en passant
+          this.handleSquareEmptied(lastMove.to, now);
         }
       }
     }
     
     // Use enPassantCapture as the captured piece if it exists
     const actualCaptured = captured || enPassantCapture;
+    
+    // Handle hit points system
+    if (this.state.settings.enableHitPointsSystem && actualCaptured) {
+      // Initialize hit points if not set
+      if (actualCaptured.hitPoints === undefined) {
+        actualCaptured.hitPoints = 3;
+      }
+      
+      // Reduce hit points instead of capturing immediately
+      actualCaptured.hitPoints--;
+      
+      if (actualCaptured.hitPoints > 0) {
+        // Piece still has hit points, don't capture it
+        // The attacker doesn't move, only the defender loses HP
+        
+        // Add cooldown and move history (but no actual movement)
+        this.addCooldownAndHistory(playerId, from, now, from, from, piece, undefined, to);
+        
+        this.cleanupOldData();
+        this.checkGameEnd();
+        this.updateCheckStatus();
+        
+        return { success: true, move: { from, to: from, piece, captured: undefined, attackTarget: to } };
+      }
+      // If hit points reach 0, continue with normal capture logic below
+    }
     
     // If capturing a king, end the game immediately (no promotion)
     if (actualCaptured && actualCaptured.type === 'k') {
@@ -342,7 +542,7 @@ export class Game {
       this.board[fromRow][fromCol] = null;
       
       // Add to move history
-      this.state.moveHistory.push({ from, to, piece, captured: actualCaptured });
+      this.state.moveHistory.push({ from, to, piece, captured: actualCaptured, attackTarget: undefined });
       this.state.playerMoveHistory.push({ playerId, timestamp: now });
       
       // End the game
@@ -350,7 +550,7 @@ export class Game {
       this.state.winner = playerId;
       this.state.gameEndReason = 'king-captured';
       
-      return { success: true, move: { from, to, piece, captured: actualCaptured } };
+      return { success: true, move: { from, to, piece, captured: actualCaptured, attackTarget: undefined } };
     }
     
     // Check for pawn promotion (only if not capturing king)
@@ -369,7 +569,8 @@ export class Game {
           // Complete promotion immediately
           const promotedPiece: Piece = {
             type: promotion as 'q' | 'r' | 'b' | 'n',
-            color: piece.color
+            color: piece.color,
+            hitPoints: this.state.settings.enableHitPointsSystem ? 3 : undefined
           };
           piece.type = promotedPiece.type;
         }
@@ -387,11 +588,18 @@ export class Game {
       const rook = this.board[rookRow][rookFromCol];
       this.board[rookRow][rookToCol] = rook;
       this.board[rookRow][rookFromCol] = null;
+      
+      // Check if we emptied a rook square during castling
+      const rookFromSquare = coordsToSquare(rookRow, rookFromCol);
+      this.handleSquareEmptied(rookFromSquare, now);
     }
     
     // Move piece
     this.board[toRow][toCol] = piece;
     this.board[fromRow][fromCol] = null;
+    
+    // Check if we just emptied a rook square and start cooldown if needed
+    this.handleSquareEmptied(from, now);
     
     // Update castling rights
     if (piece.type === 'k') {
@@ -410,31 +618,125 @@ export class Game {
       if (from === 'h8') this.state.castlingRights.blackKingSide = false;
     }
     
+    // Add cooldown and move history
+    this.addCooldownAndHistory(playerId, to, now, from, to, piece, actualCaptured, undefined);
+    
+    // Generate random pieces if enabled
+    if (this.state.settings.enableRandomPieceGeneration) {
+      this.tryGenerateRandomPieces(now);
+    }
+    
+    this.cleanupOldData();
+    // Check for game end
+    this.checkGameEnd();
+    // Update check status after the move
+    this.updateCheckStatus();
+    return { success: true, move: { from, to, piece, captured: actualCaptured, attackTarget: undefined } };
+  }
+
+  private addCooldownAndHistory(playerId: string, to: Square, now: Date, from: Square, toSquare: Square, piece: Piece, captured?: Piece, attackTarget?: Square): void {
     // Remove any existing cooldowns on the destination square
     this.state.pieceCooldowns = this.state.pieceCooldowns.filter(
       pc => pc.square !== to
     );
     
     // Add cooldown on destination square
-    const cooldownEnd = new Date(now.getTime() + this.state.settings.pieceCooldownSeconds * 1000);
+    const cooldownEnd = new Date(now.getTime() + this.state.settings!.pieceCooldownSeconds * 1000);
     this.state.pieceCooldowns.push({
       square: to,
       playerId,
       availableAt: cooldownEnd
     });
+    
     // Add to player move history
     this.state.playerMoveHistory.push({ playerId, timestamp: now });
     
     // Add to game move history
-    this.state.moveHistory.push({ from, to, piece, captured: actualCaptured });
+    this.state.moveHistory.push({ from, to: toSquare, piece, captured, attackTarget });
     
     // Clear any pending promotion state since a move was successfully made
     this.state.pendingPromotion = undefined;
+  }
+
+  private initializeHitPoints(): void {
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = this.board[row][col];
+        if (piece) {
+          piece.hitPoints = 3;
+        }
+      }
+    }
+  }
+
+  private tryGenerateRandomPieces(now: Date): void {
+    // Check each rook square for piece generation
+    const rookSquares: Square[] = ['a1', 'h1', 'a8', 'h8'];
     
-    this.cleanupOldData();
-    // Check for game end
-    this.checkGameEnd();
-    return { success: true, move: { from, to, piece, captured: actualCaptured } };
+    for (const square of rookSquares) {
+      const [row, col] = squareToCoords(square);
+      const isEmpty = this.board[row][col] === null;
+      
+      if (isEmpty) {
+        // Check if this square has a cooldown
+        const cooldownEnd = this.state.pieceGenerationCooldowns[square];
+        
+        if (cooldownEnd && now >= cooldownEnd) {
+          // Cooldown has ended, generate a piece immediately
+          this.generatePieceAtSquare(square);
+          // Remove the cooldown since piece is now generated
+          delete this.state.pieceGenerationCooldowns[square];
+        }
+        // If no cooldown exists for this empty square, it means the square 
+        // was empty from the start or cooldown was already set when it became empty
+      }
+    }
+  }
+
+  private generatePieceAtSquare(square: Square): void {
+    const [row, col] = squareToCoords(square);
+    
+    // Only generate if square is still empty
+    if (this.board[row][col] === null) {
+      // Follow specific piece order: Bishop, knight, bishop, knight, rook, queen (repeat)
+      const pieceSequence: ('b' | 'n' | 'b' | 'n' | 'r' | 'q')[] = ['b', 'n', 'b', 'n', 'r', 'q'];
+      const pieceType = pieceSequence[this.pieceGenerationCounter % pieceSequence.length];
+      
+      // Increment counter for next generation
+      this.pieceGenerationCounter++;
+      
+      // Determine color based on square (bottom row = white, top row = black)
+      const color: 'w' | 'b' = row === 7 ? 'w' : 'b';
+      
+      const newPiece: Piece = {
+        type: pieceType,
+        color,
+        hitPoints: this.state.settings?.enableHitPointsSystem ? 3 : undefined
+      };
+      
+      this.board[row][col] = newPiece;
+      
+      // Convert piece type to readable name
+      const pieceNames = { 'b': 'bishop', 'n': 'knight', 'r': 'rook', 'q': 'queen' };
+      console.log(`✨ Generated ${pieceNames[pieceType]} at ${square} (sequence #${this.pieceGenerationCounter})`);
+    }
+  }
+
+  private handleSquareEmptied(square: Square, now: Date): void {
+    // When a rook square becomes empty, start the 20-second cooldown
+    const rookSquares: Square[] = ['a1', 'h1', 'a8', 'h8'];
+    
+    if (rookSquares.includes(square) && this.state.settings?.enableRandomPieceGeneration) {
+      // Set cooldown to end 20 seconds from now
+      const cooldownEnd = new Date(now.getTime() + 20000); // 20 seconds
+      this.state.pieceGenerationCooldowns[square] = cooldownEnd;
+      console.log(`⏰ Started 20s cooldown for piece generation at ${square}`);
+    }
+  }
+
+  private generateRandomPiecesOnRookSquares(): void {
+    // This method is no longer used - keeping for compatibility
+    // The new system uses per-square cooldowns instead
   }
 
   private cleanupOldData(): void {
@@ -474,6 +776,69 @@ export class Game {
         this.state.gameEndReason = 'king-captured';
       }
     }
+  }
+
+  private updateCheckStatus(): void {
+    // Find king positions
+    let whiteKingSquare: Square | null = null;
+    let blackKingSquare: Square | null = null;
+    
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = this.board[row][col];
+        if (piece && piece.type === 'k') {
+          const square = coordsToSquare(row, col);
+          if (piece.color === 'w') {
+            whiteKingSquare = square;
+          } else {
+            blackKingSquare = square;
+          }
+        }
+      }
+    }
+
+    const checkingPieces: { square: Square; piece: Piece }[] = [];
+    let whiteInCheck = false;
+    let blackInCheck = false;
+
+    // Check if white king is in check
+    if (whiteKingSquare) {
+      const [kingRow, kingCol] = squareToCoords(whiteKingSquare);
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const piece = this.board[row][col];
+          if (piece && piece.color === 'b') {
+            if (isLegalMove(piece, row, col, kingRow, kingCol, this.board, 'black', this.state.castlingRights, this.state.moveHistory)) {
+              whiteInCheck = true;
+              checkingPieces.push({ square: coordsToSquare(row, col), piece });
+            }
+          }
+        }
+      }
+    }
+
+    // Check if black king is in check
+    if (blackKingSquare) {
+      const [kingRow, kingCol] = squareToCoords(blackKingSquare);
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const piece = this.board[row][col];
+          if (piece && piece.color === 'w') {
+            if (isLegalMove(piece, row, col, kingRow, kingCol, this.board, 'white', this.state.castlingRights, this.state.moveHistory)) {
+              blackInCheck = true;
+              checkingPieces.push({ square: coordsToSquare(row, col), piece });
+            }
+          }
+        }
+      }
+    }
+
+    // Update check status
+    this.state.check = {
+      whiteInCheck,
+      blackInCheck,
+      checkingPieces
+    };
   }
 
   getPossibleMoves(playerId: string): { [square: string]: string[] } {
@@ -518,6 +883,18 @@ export class Game {
   getAllPieceCooldowns(): PieceCooldown[] {
     const now = new Date();
     return this.state.pieceCooldowns.filter(pc => pc.availableAt > now);
+  }
+
+  getLastRandomPieceGeneration(): Date {
+    return this.lastRandomPieceGeneration;
+  }
+
+  getPieceGenerationCooldown(square: Square): Date | null {
+    return this.state.pieceGenerationCooldowns[square] || null;
+  }
+
+  getAllPieceGenerationCooldowns(): { [square: string]: Date } {
+    return { ...this.state.pieceGenerationCooldowns };
   }
 }
 

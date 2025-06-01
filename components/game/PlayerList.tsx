@@ -35,7 +35,10 @@ export function PlayerList({
             <div className="flex items-center space-x-1 sm:space-x-3">
               <div className="w-1 h-1 sm:w-3 sm:h-3 bg-green-500 rounded-full animate-pulse" />
               <span className="font-medium text-xs sm:text-base truncate max-w-[60px] sm:max-w-none">
-                {player.id === playerId && !isSpectator ? "YOU" : player.name}
+                {player.name}
+                {player.id === playerId && !isSpectator && (
+                  <span className="text-xs text-muted-foreground ml-1">(You)</span>
+                )}
               </span>
               {showReadyStatus && player.isReady && (
                 <Badge

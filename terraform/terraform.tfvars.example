@@ -1,0 +1,17 @@
+aws_region = "us-east-1"
+
+project_name = "rapid-chess-online"
+environment  = "prod"
+
+instance_type = "t3.small"  # t3.micro for testing, t3.small+ for production
+app_port      = 3001
+
+
+public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOF4gvtGZIlvk/kFlmqlEBpBTp4uTUUNiNMDDYd4HD+/ vladkozulin@Vlads-MacBook-Pro.local"
+
+github_repo   = "https://github.com/watislaf/kungfu-chess.com.git"
+github_branch = "main"
+
+domain_name = "kungfu-chess.com" 
+
+ssl_certificate_arn = "arn:aws:acm:us-east-1:211439781557:certificate/178ee1cd-ec0c-4bf3-916d-8599b14138cf" 

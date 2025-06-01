@@ -1,106 +1,99 @@
 #!/bin/bash
 
-# Simplified AWS Deployment Script for Rapid Chess Online
-# This script deploys both the Next.js static site and WebSocket services to AWS
+# Chess Application Deployment Script
+set -e
 
-set -e  # Exit on any error
+echo "🚀 Starting Chess Application Deployment"
 
-# Configuration - Default to production
-STAGE=${1:-prod}
-REGION=${2:-us-east-1}
-DOMAIN=${3:-""}
+# Check if required tools are installed
+command -v terraform >/dev/null 2>&1 || { echo "❌ Terraform is required but not installed. Aborting." >&2; exit 1; }
+command -v aws >/dev/null 2>&1 || { echo "❌ AWS CLI is required but not installed. Aborting." >&2; exit 1; }
 
-echo "🚀 Starting simplified deployment to AWS..."
-echo "Stage: $STAGE"
-echo "Region: $REGION"
-if [ ! -z "$DOMAIN" ]; then
-    echo "Domain: $DOMAIN"
-fi
+# Function to deploy code to remote server
+deploy_code_to_server() {
+    echo "📡 Deploying updated code to remote server..."
+    
+    # Get the server IP from Terraform output
+    cd terraform
+    SERVER_IP=$(terraform output -raw instance_public_ip 2>/dev/null || echo "")
+    cd ..
+    
+    if [ -z "$SERVER_IP" ]; then
+        echo "❌ Could not get server IP from Terraform. Skipping code deployment."
+        return 1
+    fi
+    
+    echo "🎯 Deploying to server: $SERVER_IP"
+    
+    # Create update package
+    echo "📦 Creating update package..."
+    tar -czf update.tar.gz out/ dist/
+    
+    # Upload and deploy
+    echo "⬆️  Uploading files..."
+    scp -o StrictHostKeyChecking=no update.tar.gz ubuntu@$SERVER_IP:/tmp/
+    
+    echo "🔄 Extracting and restarting service..."
+    ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP '
+        cd /opt/chess-app &&
+        sudo tar -xzf /tmp/update.tar.gz &&
+        sudo chown -R ubuntu:ubuntu . &&
+        pm2 restart chess-app &&
+        echo "✅ Code deployment completed successfully!"
+    '
+    
+    # Cleanup
+    rm -f update.tar.gz
+    echo "🧹 Cleanup completed"
+}
 
-# Check if AWS CLI is configured
-if ! aws sts get-caller-identity > /dev/null 2>&1; then
-    echo "❌ AWS CLI not configured. Please run 'aws configure' first."
+# Build the application
+echo "📦 Building application..."
+npm run build
+
+# Navigate to terraform directory
+cd terraform
+
+# Check if terraform.tfvars exists
+if [ ! -f "terraform.tfvars" ]; then
+    echo "❌ terraform.tfvars file not found. Please create it from terraform.tfvars.example"
     exit 1
 fi
 
-# Check if serverless is installed
-if ! command -v serverless &> /dev/null; then
-    echo "📦 Installing Serverless Framework..."
-    npm install -g serverless
-fi
+# Initialize Terraform
+echo "🔧 Initializing Terraform..."
+terraform init
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-npm install
+# Plan the deployment
+echo "📋 Planning deployment..."
+terraform plan
 
-# Deploy WebSocket service first
-echo "🌐 Deploying WebSocket service..."
-serverless deploy -c serverless-websocket.yml --stage $STAGE --region $REGION
+# Apply the deployment automatically (no user confirmation required)
+echo "🚀 Deploying to AWS..."
+terraform apply -auto-approve
 
-# Get WebSocket URL
-echo "📡 Getting WebSocket URL..."
-WEBSOCKET_URL=$(aws cloudformation describe-stacks \
-    --stack-name rapid-chess-websocket-$STAGE \
-    --region $REGION \
-    --query 'Stacks[0].Outputs[?OutputKey==`WebSocketURI`].OutputValue' \
-    --output text 2>/dev/null || echo "")
+# Get outputs
+echo "📊 Deployment completed! Here are the details:"
+terraform output
 
-if [ ! -z "$WEBSOCKET_URL" ]; then
-    echo "WebSocket URL: $WEBSOCKET_URL"
-    
-    # Create .env.production for Next.js
-    echo "⚙️ Creating production environment variables..."
-    cat > .env.production << EOF
-NEXT_PUBLIC_WEBSOCKET_URL=$WEBSOCKET_URL
-# Socket.IO server URL - you need to deploy the Node.js server separately
-# NEXT_PUBLIC_SOCKETIO_URL=https://your-socketio-server.herokuapp.com
-NODE_ENV=production
-EOF
-fi
+echo "✅ Chess application infrastructure deployed successfully!"
 
-# Build Next.js static export
-echo "🔨 Building Next.js static export..."
-npm run build
+# Go back to project root
+cd ..
 
-# Deploy static site
-echo "🚀 Deploying static site..."
-if [ ! -z "$DOMAIN" ]; then
-    serverless deploy --stage $STAGE --region $REGION --domain $DOMAIN
+# Deploy code to the server
+deploy_code_to_server
+
+# Run verification script
+echo ""
+echo "🔍 Running deployment verification..."
+cd terraform
+if [ -f "verify-deployment.sh" ]; then
+    ./verify-deployment.sh
 else
-    serverless deploy --stage $STAGE --region $REGION
+    echo "⚠️  Verification script not found - manual testing recommended"
 fi
 
-# Sync static files to S3
-echo "📤 Syncing static files to S3..."
-serverless s3sync --stage $STAGE --region $REGION
-
-# Get CloudFront URL
-echo "🌐 Getting application URLs..."
-STATIC_URL=$(aws cloudformation describe-stacks \
-    --stack-name rapid-chess-online-$STAGE \
-    --region $REGION \
-    --query 'Stacks[0].Outputs[?OutputKey==`WebsiteURL`].OutputValue' \
-    --output text 2>/dev/null || echo "Not available")
-
 echo ""
-echo "✅ Deployment completed successfully!"
-echo ""
-echo "📱 Application URLs:"
-echo "   Static Site: $STATIC_URL"
-if [ ! -z "$WEBSOCKET_URL" ]; then
-    echo "   WebSocket:   $WEBSOCKET_URL"
-fi
-echo ""
-echo "🎮 Your chess game is now live on AWS!"
-echo ""
-echo "📊 AWS Resources created:"
-echo "   - CloudFront Distribution"
-echo "   - S3 Bucket for static files"
-echo "   - Lambda Functions (WebSocket)"
-echo "   - API Gateway (WebSocket)"
-echo ""
-echo "💡 To update the application:"
-echo "   ./deploy.sh $STAGE $REGION"
-echo ""
-echo "🧹 To clean up resources:"
-echo "   ./destroy.sh $STAGE $REGION" 
+echo "🌐 You can access your application at the URL shown above."
+echo "🔧 Application code has been automatically deployed to the server." 

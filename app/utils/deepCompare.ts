@@ -52,5 +52,7 @@ export function compareGameSettings(settings1: GameSettings | undefined, setting
   }
 
   return settings1.maxMovesPerPeriod === settings2.maxMovesPerPeriod && 
-         settings1.pieceCooldownSeconds === settings2.pieceCooldownSeconds;
+         settings1.pieceCooldownSeconds === settings2.pieceCooldownSeconds &&
+         settings1.enableRandomPieceGeneration === settings2.enableRandomPieceGeneration &&
+         settings1.enableHitPointsSystem === settings2.enableHitPointsSystem;
 } 

@@ -18,7 +18,11 @@ interface GameStartedProps {
   movesLeft: number;
   onMove: (from: string, to: string, promotion?: string) => void;
   onRequestPossibleMoves: () => void;
-  onNewGame: () => void;
+  onMoveSuccess?: (moveId: string) => void;
+  onMoveError?: (moveId: string, error: string) => void;
+  onSurrender?: () => void;
+  onRestartGame?: () => void;
+  onBackToHome?: () => void;
 }
 
 export function GameStarted({
@@ -32,9 +36,45 @@ export function GameStarted({
   movesLeft,
   onMove,
   onRequestPossibleMoves,
-  onNewGame,
+  onMoveSuccess,
+  onMoveError,
+  onSurrender,
+  onRestartGame,
+  onBackToHome,
 }: GameStartedProps) {
   const currentPlayer = gameState.players.find((p) => p.id === playerId);
+
+  // Debug logging for player identification issues
+  if (!currentPlayer && !isSpectator) {
+    console.warn('🔍 [GameStarted] Player not found in game state:', {
+      playerId,
+      gameStatePlayers: gameState.players.map(p => ({ id: p.id, name: p.name, side: p.side })),
+      isSpectator
+    });
+  }
+  
+  // Determine player side more defensively
+  let playerSide: "white" | "black" = "white";
+  if (currentPlayer?.side) {
+    playerSide = currentPlayer.side;
+  } else if (!isSpectator && gameState.players.length > 0) {
+    // Fallback: if we can't find the current player, try to infer from the game state
+    // This should rarely happen but provides a safety net
+    console.warn('🔄 [GameStarted] Falling back to side inference');
+    
+    // If there's only one player and it's not us, we might be the second player (black)
+    if (gameState.players.length === 1 && gameState.players[0].id !== playerId) {
+      playerSide = "black";
+    }
+    // If there are two players, check if we can find ourselves by name match or other heuristics
+    else if (gameState.players.length === 2) {
+      // As a last resort, assume we're black if we're not the first player
+      const firstPlayer = gameState.players[0];
+      if (firstPlayer.id !== playerId) {
+        playerSide = "black";
+      }
+    }
+  }
 
   // Request possible moves when component mounts and periodically
   useEffect(() => {
@@ -55,11 +95,15 @@ export function GameStarted({
       <ChessBoard
         gameState={gameState}
         playerId={playerId}
-        playerSide={currentPlayer?.side || "white"}
+        playerSide={playerSide}
         onMove={onMove}
         possibleMoves={possibleMoves}
         pieceCooldowns={pieceCooldowns}
         movesLeft={movesLeft}
+        onMoveSuccess={onMoveSuccess}
+        onMoveError={onMoveError}
+        onSurrender={onSurrender}
+        isSpectator={isSpectator}
       />
 
       <div className="flex flex-col gap-2 sm:grid sm:gap-4 lg:grid-cols-2">
@@ -88,7 +132,8 @@ export function GameStarted({
         <EndGame
           gameState={gameState}
           playerId={playerId}
-          onNewGame={onNewGame}
+          onRestartGame={onRestartGame}
+          onBackToHome={onBackToHome}
         />
       )}
     </div>

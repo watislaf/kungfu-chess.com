@@ -3,6 +3,7 @@ import PieceSVG from "./PieceSVG";
 import { CooldownOverlay } from "./CooldownOverlay";
 import { PieceCooldown } from "@/app/models/Game";
 import { Square as SquareType } from "chess.js";
+import { BOARD_THEMES, type BoardTheme } from "./BoardCustomization";
 
 interface SquareProps {
   square: SquareType;
@@ -17,6 +18,15 @@ interface SquareProps {
   isLastMoveFrom: boolean;
   canMakeMove: boolean;
   nextMoveAvailableAt?: Date;
+  isKingInCheck?: boolean;
+  hitPoints?: number;
+  maxHitPoints?: number;
+  isRandomGenerationEnabled?: boolean;
+  isBeingAttacked?: boolean;
+  isTakingDamage?: boolean;
+  isPendingMove?: boolean;
+  boardTheme?: string;
+  pieceTheme?: string;
   onClick: (square: SquareType) => void;
 }
 
@@ -33,58 +43,89 @@ export const Square: React.FC<SquareProps> = ({
   isLastMoveFrom,
   canMakeMove,
   nextMoveAvailableAt,
+  isKingInCheck,
+  hitPoints,
+  maxHitPoints = 3,
+  isRandomGenerationEnabled,
+  isBeingAttacked,
+  isTakingDamage,
+  isPendingMove,
+  boardTheme,
+  pieceTheme,
   onClick,
 }) => {
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
-  // Update current time every second for countdown
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 1000);
+    if (!canMakeMove && nextMoveAvailableAt) {
+      const updateCountdown = () => {
+        const now = Date.now();
+        const remaining = Math.max(0, Math.ceil((nextMoveAvailableAt.getTime() - now) / 1000));
+        setRemainingSeconds(remaining);
+      };
+
+      updateCountdown();
+      const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, []);
+    } else {
+      setRemainingSeconds(0);
+    }
+  }, [canMakeMove, nextMoveAvailableAt]);
 
-  // Calculate remaining time until next move
-  const remainingSeconds = nextMoveAvailableAt 
-    ? Math.max(0, Math.ceil((nextMoveAvailableAt.getTime() - currentTime) / 1000))
-    : 0;
+  // Enhanced square styling with themes
+  const isCornerSquare = ['a1', 'h1', 'a8', 'h8'].includes(square);
+  const currentBoardTheme = BOARD_THEMES.find(theme => theme.id === boardTheme) || BOARD_THEMES[0];
+  
+  let baseColor;
+  if (isCornerSquare && isRandomGenerationEnabled) {
+    // Special colors for corner squares when random generation is enabled
+    baseColor = isLight 
+      ? "bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-200 border border-yellow-400/50" 
+      : "bg-gradient-to-br from-green-700 via-green-800 to-green-900 border border-yellow-400/50";
+  } else {
+    // Use theme colors
+    baseColor = isLight 
+      ? currentBoardTheme.lightSquare
+      : currentBoardTheme.darkSquare;
+  }
+  
+  const borderColor = isSelected 
+    ? "ring-4 ring-blue-400 ring-opacity-75 shadow-lg shadow-blue-400/50" 
+    : "";
 
-  // Animated border glow
-  let borderColor = "border border-muted transition-all duration-300";
-  if (isSelected)
-    borderColor =
-      "border-2 border-blue-500 shadow-[0_0_8px_2px_rgba(59,130,246,0.4)] animate-glow";
-  else if (isPossibleTarget && canMakeMove)
-    borderColor =
-      "border-2 border-green-500/70 shadow-[0_0_8px_2px_rgba(34,197,94,0.4)] animate-glow";
-  else if (isPossibleTarget && !canMakeMove)
-    borderColor =
-      "border-2 border-gray-500/70 shadow-[0_0_8px_2px_rgba(107,114,128,0.4)] animate-glow";
-  else if (cooldowns.length > 0)
-    borderColor =
-      "border-2 border-blue-400/70 shadow-[0_0_8px_2px_rgba(96,165,250,0.3)] animate-glow";
+  // King in check styling with pulsing red effect
+  const kingThreatClass = isKingInCheck 
+    ? "ring-4 ring-red-500 ring-opacity-90 animate-pulse bg-gradient-to-br from-red-200 via-red-300 to-red-400" 
+    : "";
 
-  const baseColor = isLight
-    ? "bg-stone-100 dark:bg-stone-200"
-    : "bg-emerald-600 dark:bg-emerald-700";
+  // Pending move styling with subtle yellow glow
+  const pendingMoveClass = isPendingMove 
+    ? "ring-2 ring-yellow-400 ring-opacity-60 shadow-lg shadow-yellow-400/30" 
+    : "";
+
+  // Calculate missing hit points for display
+  const showHitPoints = hitPoints !== undefined && maxHitPoints && hitPoints < maxHitPoints;
+  const missingHitPoints = showHitPoints ? maxHitPoints - hitPoints : 0;
 
   return (
     <div
-      className={`aspect-square flex items-center justify-center text-sm sm:text-3xl transition-all duration-200 relative overflow-hidden ${baseColor} ${borderColor} ${
+      className={`aspect-square flex items-center justify-center text-sm sm:text-3xl transition-all duration-200 relative overflow-hidden shadow-sm ${baseColor} ${borderColor} ${kingThreatClass} ${pendingMoveClass} ${
         isPlayerPiece && cooldowns.length === 0
-          ? "cursor-pointer hover:bg-primary/20"
+          ? "cursor-pointer hover:shadow-lg hover:shadow-primary/30 hover:scale-[1.02]"
           : isPossibleTarget && canMakeMove
-          ? "cursor-pointer hover:bg-green-500/20"
+          ? "cursor-pointer hover:shadow-lg hover:shadow-green-400/30 hover:scale-[1.02]"
           : isPossibleTarget && !canMakeMove
-          ? "cursor-not-allowed hover:bg-gray-500/20"
+          ? "cursor-not-allowed hover:shadow-lg hover:shadow-gray-400/30"
           : "cursor-default"
       }`}
       onClick={() => onClick(square)}
     >
-      {/* Move trail indicator */}
+      {/* Subtle inner shadow for depth */}
+      <div className="absolute inset-0 shadow-inner opacity-30" />
+      
+      {/* Move trail indicator with enhanced styling */}
       {isLastMoveFrom && (
-        <div className="absolute inset-0 bg-blue-400/30 border-2 border-blue-400/60 animate-pulse" />
+        <div className="absolute inset-0 bg-gradient-radial from-blue-400/40 to-transparent border-2 border-blue-400/60 animate-pulse rounded-sm" />
       )}
       
       {cooldowns.map((cd, idx) => {
@@ -102,39 +143,47 @@ export const Square: React.FC<SquareProps> = ({
           />
         );
       })}
+      
       {piece && (
         <div
           className={`relative z-10 w-3/4 h-3/4 transition-all duration-500 ${
             cooldowns.length > 0 ? "opacity-60" : ""
-          } animate-fade-in`}
+          } ${isBeingAttacked ? "animate-shake" : ""} ${isTakingDamage ? "animate-damage-shake" : ""} animate-fade-in drop-shadow-sm`}
         >
-          <PieceSVG piece={piece} />
+          <PieceSVG piece={piece} theme={pieceTheme} />
+          
+          {/* Hit points indicator */}
+          {showHitPoints && missingHitPoints > 0 && (
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 shadow-lg border border-red-600">
+              -{missingHitPoints}
+            </div>
+          )}
         </div>
       )}
-      {/* Green dots for available moves */}
+      
+      {/* Enhanced move indicators */}
       {isPossibleTarget && !piece && canMakeMove && (
-        <div className="w-1/3 h-1/3 rounded-full bg-green-500/50 z-10 animate-pulse" />
+        <div className="w-1/3 h-1/3 rounded-full bg-green-500 z-10 animate-pulse shadow-lg border-2 border-green-600" />
       )}
-      {/* Gray dots with timer for unavailable moves */}
       {isPossibleTarget && !piece && !canMakeMove && (
         <div className="flex flex-col items-center justify-center z-10">
-          <div className="w-1/3 h-1/3 rounded-full bg-gray-500/50 animate-pulse" />
+          <div className="w-1/3 h-1/3 rounded-full bg-gray-500 animate-pulse shadow-lg border-2 border-gray-600" />
           {remainingSeconds > 0 && (
-            <div className="text-xs text-gray-400 font-bold mt-1 bg-black/30 rounded px-1">
+            <div className="text-xs text-gray-300 font-bold mt-1 bg-black/50 rounded px-1 shadow-sm">
               {remainingSeconds}s
             </div>
           )}
         </div>
       )}
-      {/* Border highlight for pieces that can be captured */}
+      
+      {/* Enhanced capture indicators */}
       {isPossibleTarget && piece && canMakeMove && (
-        <div className="absolute inset-0 border-2 border-green-500/70 rounded-sm z-10 animate-glow" />
+        <div className="absolute inset-0 border-4 border-green-500 bg-green-400/30 rounded-sm z-10 animate-glow shadow-lg shadow-green-400/50" />
       )}
-      {/* Gray border highlight for pieces that could be captured but no bullets */}
       {isPossibleTarget && piece && !canMakeMove && (
-        <div className="absolute inset-0 border-2 border-gray-500/70 rounded-sm z-10 animate-glow">
+        <div className="absolute inset-0 border-4 border-gray-500 bg-gray-400/30 rounded-sm z-10 animate-glow shadow-lg shadow-gray-400/50">
           {remainingSeconds > 0 && (
-            <div className="absolute bottom-0 right-0 text-xs text-gray-300 font-bold bg-black/50 rounded-tl px-1">
+            <div className="absolute bottom-0 right-0 text-xs text-gray-300 font-bold bg-black/60 rounded-tl px-1 shadow-sm">
               {remainingSeconds}s
             </div>
           )}

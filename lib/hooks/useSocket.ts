@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { GameState, GameSettings, PieceCooldown } from '@/app/models/Game';
@@ -13,6 +14,7 @@ interface UseSocketReturn {
   possibleMoves: { [square: string]: string[] };
   pieceCooldowns: PieceCooldown[];
   movesLeft: number;
+  isMatchmaking: boolean;
   joinGame: (gameId: string, playerName?: string) => void;
   leaveGame: () => void;
   switchSides: () => void;
@@ -20,9 +22,13 @@ interface UseSocketReturn {
   setGameSettings: (settings: GameSettings) => void;
   makeMove: (from: Square, to: Square, promotion?: string) => void;
   requestPossibleMoves: () => void;
+  findRandomPlayer: (playerName?: string) => void;
+  cancelMatchmaking: () => void;
+  restartGame: () => void;
 }
 
 export function useSocket(): UseSocketReturn {
+  const router = useRouter();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [gameState, setGameState] = useState<(GameState & { board: (any[] | null)[] }) | null>(null);
@@ -31,44 +37,51 @@ export function useSocket(): UseSocketReturn {
   const [possibleMoves, setPossibleMoves] = useState<{ [square: string]: string[] }>({});
   const [pieceCooldowns, setPieceCooldowns] = useState<PieceCooldown[]>([]);
   const [movesLeft, setMovesLeft] = useState<number>(0);
+  const [isMatchmaking, setIsMatchmaking] = useState<boolean>(false);
   const prevGameStateRef = useRef<(GameState & { board: (any[] | null)[] }) | null>(null);
   const hasShownConnectedToast = useRef(false);
-  const [lastSettingsUpdate, setLastSettingsUpdate] = useState<{
-    settings: GameSettings;
-    playerId: string;
-    playerName: string;
-  } | null>(null);
 
   useEffect(() => {
     // Determine connection URL based on environment
     let serverUrl: string | undefined;
     
     if (typeof window !== 'undefined') {
-      // Check for environment-specific Socket.IO server URL
       const socketIOUrl = process.env.NEXT_PUBLIC_SOCKETIO_URL;
       
       if (socketIOUrl) {
-        // Use explicitly configured Socket.IO server
         serverUrl = socketIOUrl;
-        console.log('Using configured Socket.IO server:', serverUrl);
-      } else if (window.location.hostname.includes('cloudfront.net')) {
-        // Production: Try connecting to a Socket.IO server on the same domain
-        // This requires deploying the Socket.IO server to the same domain
-        serverUrl = window.location.origin;
-        console.log('Production detected, connecting to same origin:', serverUrl);
+      } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        // Local development - use HTTP
+        serverUrl = 'http://localhost:3001';
+      } else if (window.location.protocol === 'https:') {
+        // Production HTTPS - use WSS with domain (ALB handles routing)
+        serverUrl = `https://${window.location.hostname}`;
       } else {
-        // Development: Use default (localhost)
-        serverUrl = undefined;
-        console.log('Development detected, using default connection');
+        // Production HTTP fallback - use HTTP with port 3001
+        serverUrl = `http://${window.location.hostname}:3001`;
       }
     }
     
-    // Create Socket.IO connection
     const newSocket = serverUrl ? io(serverUrl, {
       transports: ['websocket', 'polling'],
       timeout: 10000,
-      forceNew: true
-    }) : io();
+      forceNew: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      // For HTTPS/WSS connections, ensure secure transport
+      secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
+      // Disable upgrade for polling initially, let Socket.IO handle it
+      upgrade: true,
+      // Add path to match ALB configuration
+      path: '/socket.io/'
+    }) : io({
+      timeout: 10000,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000
+    });
     
     setSocket(newSocket);
 
@@ -81,14 +94,15 @@ export function useSocket(): UseSocketReturn {
       }
     });
 
-    newSocket.on('disconnect', () => {
+    newSocket.on('disconnect', (reason) => {
       setIsConnected(false);
-      toast.error('Disconnected from server');
       hasShownConnectedToast.current = false;
     });
 
     newSocket.on('connect_error', (error) => {
-      toast.error('Connection failed');
+      if (!hasShownConnectedToast.current) {
+        toast.error('Failed to connect to game server');
+      }
     });
 
     // Game events
@@ -106,7 +120,7 @@ export function useSocket(): UseSocketReturn {
         toast.dismiss();
         
         if (data.isSpectator) {
-          toast.info('Joined as spectator - you can watch the game');
+          toast.info('Joined as spectator');
         } else {
           toast.success('Joined game successfully');
         }
@@ -127,13 +141,6 @@ export function useSocket(): UseSocketReturn {
         );
         if (newPlayer) {
           toast.info(`${newPlayer.name} joined the game`);
-        }
-      }
-      
-      if (prevState && updatedGameState.spectators.length > prevState.spectators.length) {
-        const newSpectatorCount = updatedGameState.spectators.length - prevState.spectators.length;
-        if (newSpectatorCount > 0) {
-          toast.info(`${newSpectatorCount} spectator${newSpectatorCount > 1 ? 's' : ''} joined`);
         }
       }
       
@@ -162,26 +169,6 @@ export function useSocket(): UseSocketReturn {
       toast.info('Sides switched');
     });
 
-    // Chess-specific events
-    newSocket.on('settings-updated', (data: { 
-      settings: GameSettings; 
-      playerId: string; 
-      playerName: string; 
-    }) => {
-      setLastSettingsUpdate(data);
-    });
-
-    newSocket.on('move-made', (data: {
-      playerId: string;
-      playerName: string;
-      move: any;
-      from: string;
-      to: string;
-    }) => {
-      // Only show toast for opponent moves, not our own
-      // We'll check this when we have the current playerId
-    });
-
     newSocket.on('move-error', (data: { message: string }) => {
       toast.error(data.message);
     });
@@ -202,36 +189,95 @@ export function useSocket(): UseSocketReturn {
     newSocket.on('game-ended', (data: {
       winner?: string;
       reason: string;
+      surrenderedBy?: string;
+      surrenderedByName?: string;
+      disconnectedBy?: string;
+      disconnectedByName?: string;
     }) => {
-      if (data.winner) {
+      if (data.surrenderedBy && data.surrenderedByName) {
+        if (data.surrenderedBy === playerId) {
+          toast.info(`You surrendered. Game ended.`);
+        } else {
+          toast.success(`${data.surrenderedByName} surrendered. You win!`);
+        }
+      } else if (data.disconnectedBy && data.disconnectedByName) {
+        if (data.disconnectedBy === playerId) {
+          toast.info(`You disconnected. Game ended.`);
+        } else {
+          toast.success(`${data.disconnectedByName} disconnected. You win!`);
+        }
+      } else if (data.winner) {
         toast.success(`Game ended! Winner: ${data.reason}`);
       } else {
         toast.info(`Game ended in ${data.reason}`);
       }
     });
 
+    // Matchmaking events
+    newSocket.on('matchmaking-started', (data: { message: string; queuePosition: number }) => {
+      setIsMatchmaking(true);
+      toast.info(`${data.message} (${data.queuePosition} player${data.queuePosition !== 1 ? 's' : ''} in queue)`);
+    });
+
+    newSocket.on('matchmaking-cancelled', (data: { message: string }) => {
+      setIsMatchmaking(false);
+      toast.info(data.message);
+    });
+
+    newSocket.on('matchmaking-error', (data: { message: string }) => {
+      setIsMatchmaking(false);
+      toast.error(data.message);
+    });
+
+    newSocket.on('matched-with-player', (data: {
+      success: boolean;
+      gameState: GameState & { board: (any[] | null)[] };
+      gameId: string;
+      playerId?: string;
+      opponentName?: string;
+    }) => {
+      setIsMatchmaking(false);
+      if (data.success) {
+        setGameState(data.gameState);
+        if (data.playerId) {
+          setPlayerId(data.playerId);
+        }
+        toast.success(`Matched with ${data.opponentName || 'a player'}! Starting game...`);
+        
+        router.push(`/game?id=${data.gameId}`);
+      }
+    });
+
+    newSocket.on('waiting-room-created', (data: {
+      gameId: string;
+      message: string;
+    }) => {
+      router.push(`/game?id=${data.gameId}`);
+      toast.info(data.message);
+    });
+
+    newSocket.on('game-restarted', (data: {
+      restartedBy: string;
+      playerName?: string;
+    }) => {
+      if (data.restartedBy === playerId) {
+        toast.success('Game restarted!');
+      } else {
+        toast.info(`${data.playerName || 'Player'} restarted the game`);
+      }
+    });
+
     return () => {
       newSocket.close();
     };
-  }, []);
-
-  // Handle settings update notifications
-  useEffect(() => {
-    if (lastSettingsUpdate && playerId) {
-      if (lastSettingsUpdate.playerId === playerId) {
-        // Don't show toast for own updates to avoid spam
-      } else {
-        toast.info(`${lastSettingsUpdate.playerName} updated game settings`);
-      }
-    }
-  }, [lastSettingsUpdate, playerId]);
+  }, [router]);
 
   const joinGame = useCallback((gameId: string, playerName?: string) => {
-    if (socket) {
-      socket.emit('join-game', { gameId, playerName });
-      toast.loading('Joining game...', { id: 'joining' });
+    if (!socket || !isConnected) {
+      return;
     }
-  }, [socket]);
+    socket.emit('join-game', { gameId, playerName });
+  }, [socket, isConnected]);
 
   const leaveGame = useCallback(() => {
     if (socket) {
@@ -258,7 +304,7 @@ export function useSocket(): UseSocketReturn {
 
   const setGameSettings = useCallback((settings: GameSettings) => {
     if (socket && !isSpectator) {
-      socket.emit('set-game-settings', { settings });
+      socket.emit('set-game-settings', settings);
     } else if (isSpectator) {
       toast.error('Spectators cannot change game settings');
     }
@@ -274,7 +320,29 @@ export function useSocket(): UseSocketReturn {
 
   const requestPossibleMoves = useCallback(() => {
     if (socket && !isSpectator) {
-      socket.emit('get-possible-moves');
+      socket.emit('request-possible-moves');
+    }
+  }, [socket, isSpectator]);
+
+  const findRandomPlayer = useCallback((playerName?: string) => {
+    if (socket && !isSpectator && isConnected) {
+      socket.emit('find-random-player', { playerName });
+    } else if (!isConnected) {
+      toast.error('Not connected to server. Please wait for connection.');
+    }
+  }, [socket, isSpectator, isConnected]);
+
+  const cancelMatchmaking = useCallback(() => {
+    if (socket && !isSpectator) {
+      socket.emit('cancel-matchmaking');
+    }
+  }, [socket, isSpectator]);
+
+  const restartGame = useCallback(() => {
+    if (socket && !isSpectator) {
+      socket.emit('restart-game');
+    } else if (isSpectator) {
+      toast.error('Spectators cannot restart games');
     }
   }, [socket, isSpectator]);
 
@@ -287,6 +355,7 @@ export function useSocket(): UseSocketReturn {
     possibleMoves,
     pieceCooldowns,
     movesLeft,
+    isMatchmaking,
     joinGame,
     leaveGame,
     switchSides,
@@ -294,5 +363,8 @@ export function useSocket(): UseSocketReturn {
     setGameSettings,
     makeMove,
     requestPossibleMoves,
+    findRandomPlayer,
+    cancelMatchmaking,
+    restartGame,
   };
 } 
