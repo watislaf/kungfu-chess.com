@@ -38,6 +38,12 @@ const PIECE_THEME_COLORS: Record<string, PieceThemeColors> = {
     stroke: "#808080",
     strokeWidth: "0.8",
   },
+  gothic: {
+    white: "#f0f0f0",
+    black: "#1a1a1a",
+    stroke: "#000000",
+    strokeWidth: "1.8",
+  },
 };
 
 // Classic Chess Pieces (Traditional Design)

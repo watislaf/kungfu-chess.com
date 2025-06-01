@@ -1,16 +1,16 @@
 "use client";
 
-import { Square } from "chess.js";
+import { Square as SquareType } from "chess.js";
 
 interface MoveIndicatorProps {
-  from: Square;
-  to: Square;
+  from: SquareType;
+  to: SquareType;
   playerSide: "white" | "black";
 }
 
 export function MoveIndicator({ from, to, playerSide }: MoveIndicatorProps) {
   // Convert square notation to grid coordinates
-  const getCoords = (square: Square) => {
+  const getCoords = (square: SquareType) => {
     const file = square.charCodeAt(0) - 97; // a=0, b=1, etc.
     const rank = 8 - parseInt(square[1]); // 8=0, 7=1, etc.
     return { x: file, y: rank };
@@ -32,7 +32,18 @@ export function MoveIndicator({ from, to, playerSide }: MoveIndicatorProps) {
   const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
   return (
-    <div className={`absolute inset-0 ${playerSide === "black" ? "rotate-180" : ""}`}>
+    <div 
+      className={`absolute inset-0 pointer-events-none overflow-hidden ${playerSide === "black" ? "rotate-180" : ""}`}
+      style={{
+        // Ensure effects don't affect layout or create scrollbars
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 25,
+      }}
+    >
       {/* Arrow line */}
       <div
         className="absolute bg-blue-400 opacity-80 animate-fade-in shadow-lg"
@@ -88,30 +99,19 @@ export function MoveIndicator({ from, to, playerSide }: MoveIndicatorProps) {
       />
       
       {/* Additional visual effect - pulsing dots along the path */}
-      <div
-        className="absolute w-2 h-2 bg-blue-300 rounded-full opacity-70 animate-ping"
-        style={{
-          left: `calc(${fromX + (toX - fromX) * 0.25}% - 4px)`,
-          top: `calc(${fromY + (toY - fromY) * 0.25}% - 4px)`,
-          animationDelay: '0.1s',
-        }}
-      />
-      <div
-        className="absolute w-2 h-2 bg-blue-300 rounded-full opacity-70 animate-ping"
-        style={{
-          left: `calc(${fromX + (toX - fromX) * 0.5}% - 4px)`,
-          top: `calc(${fromY + (toY - fromY) * 0.5}% - 4px)`,
-          animationDelay: '0.2s',
-        }}
-      />
-      <div
-        className="absolute w-2 h-2 bg-blue-300 rounded-full opacity-70 animate-ping"
-        style={{
-          left: `calc(${fromX + (toX - fromX) * 0.75}% - 4px)`,
-          top: `calc(${fromY + (toY - fromY) * 0.75}% - 4px)`,
-          animationDelay: '0.3s',
-        }}
-      />
+      {[0.25, 0.5, 0.75].map((t, index) => (
+        <div
+          key={index}
+          className="absolute w-2 h-2 bg-blue-400 rounded-full opacity-60 animate-pulse"
+          style={{
+            left: `${fromX + dx * t}%`,
+            top: `${fromY + dy * t}%`,
+            transform: 'translate(-50%, -50%)',
+            animationDelay: `${index * 0.2}s`,
+            boxShadow: '0 0 4px rgba(59, 130, 246, 0.8)',
+          }}
+        />
+      ))}
     </div>
   );
 } 

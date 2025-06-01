@@ -3,13 +3,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Settings, HelpCircle } from "lucide-react";
+import { Settings, Heart } from "lucide-react";
 import { GameSettings, GameState } from "@/app/models/Game";
 import { useGameSettings } from "@/lib/hooks/useGameSettings";
 import { SettingsInputs } from "./SettingsInputs";
 import { SettingsDisplay } from "./SettingsDisplay";
 import { SideSelection } from "./SideSelection";
 import { ReadyButton } from "./ReadyButton";
+import { useTipPrompt } from "@/lib/hooks/useTipPrompt";
+import { TipModal } from "../ui/TipModal";
 
 interface GameSettingsAndSidesProps {
   gameState: GameState;
@@ -33,8 +35,9 @@ export function GameSettingsAndSides({
   const { settings, updateSettings } = useGameSettings({
     initialSettings: currentSettings,
     onSettingsChange: onSettingsSubmit,
-    isSpectator,
   });
+
+  const tipPrompt = useTipPrompt();
 
   const currentPlayer = gameState.players.find((p) => p.id === playerId);
   const otherPlayer = gameState.players.find((p) => p.id !== playerId);
@@ -52,36 +55,14 @@ export function GameSettingsAndSides({
             <span>Game Settings & Sides</span>
           </div>
           {showSettings && (
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 button-animated">
-                  <HelpCircle className="h-3 w-3" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Game Rules</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-2">
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• Players can move simultaneously (no turns)</li>
-                    <li>• Limited to {settings.maxMovesPerPeriod} moves per 10 seconds</li>
-                    <li>• Each piece has {settings.pieceCooldownSeconds}s cooldown after moving</li>
-                    <li>• Standard chess rules apply for valid moves</li>
-                    {settings.enableRandomPieceGeneration && (
-                      <li className="text-purple-600">
-                        • Random pieces spawn on empty rook squares every few seconds
-                      </li>
-                    )}
-                    {settings.enableHitPointsSystem && (
-                      <li className="text-red-600">
-                        • Pieces have 3 hit points - must be attacked 3 times to be captured
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-5 w-5 p-0 bg-red-900/20 border-red-900/50 text-red-400 hover:bg-red-900/40 button-animated"
+              onClick={tipPrompt.openPrompt}
+            >
+              <Heart className="h-3 w-3" />
+            </Button>
           )}
         </CardTitle>
       </CardHeader>
@@ -129,6 +110,13 @@ export function GameSettingsAndSides({
           </p>
         )}
       </CardContent>
+      
+      {/* Tip Modal */}
+      <TipModal
+        isOpen={tipPrompt.isPromptOpen}
+        onClose={tipPrompt.closePrompt}
+        onTipped={tipPrompt.onUserTipped}
+      />
     </Card>
   );
 }

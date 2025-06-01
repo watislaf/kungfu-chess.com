@@ -18,6 +18,18 @@ export function CaptureEffect({ square, playerSide }: CaptureEffectProps) {
     opacity: number;
     size: number;
   }>>([]);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile view
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640); // sm breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Convert square notation to grid coordinates
   const getCoords = (square: Square) => {
@@ -31,15 +43,20 @@ export function CaptureEffect({ square, playerSide }: CaptureEffectProps) {
   const centerY = (coords.y + 0.5) * 12.5;
 
   useEffect(() => {
+    // Reduce particle count on mobile for better performance
+    const particleCount = isMobile ? 8 : 18;
+    const maxVelocity = isMobile ? 8 : 12;
+    const maxSize = isMobile ? 6 : 8;
+    
     // Create initial particles
-    const initialParticles = Array.from({ length: 18 }, (_, i) => ({
+    const initialParticles = Array.from({ length: particleCount }, (_, i) => ({
       id: i,
       x: centerX,
       y: centerY,
-      vx: (Math.random() - 0.5) * 12, // Increased velocity
-      vy: (Math.random() - 0.5) * 12,
+      vx: (Math.random() - 0.5) * maxVelocity,
+      vy: (Math.random() - 0.5) * maxVelocity,
       opacity: 1,
-      size: Math.random() * 8 + 4, // Larger particles (4-12px)
+      size: Math.random() * maxSize + 4, // Particles (4-10px mobile, 4-12px desktop)
     }));
 
     setParticles(initialParticles);
@@ -47,15 +64,24 @@ export function CaptureEffect({ square, playerSide }: CaptureEffectProps) {
     // Animate particles
     const animateFrame = () => {
       setParticles(prev => 
-        prev.map(particle => ({
-          ...particle,
-          x: particle.x + particle.vx * 0.6, // Slightly faster movement
-          y: particle.y + particle.vy * 0.6,
-          vx: particle.vx * 0.94, // Slower deceleration
-          vy: particle.vy * 0.94,
-          opacity: particle.opacity * 0.94, // Slower fade
-          size: particle.size * 0.99, // Slower shrink
-        })).filter(particle => particle.opacity > 0.08) // Keep particles longer
+        prev.map(particle => {
+          const newX = particle.x + particle.vx * 0.6;
+          const newY = particle.y + particle.vy * 0.6;
+          
+          // Constrain particles to stay within reasonable bounds (0-100%)
+          const constrainedX = Math.max(0, Math.min(100, newX));
+          const constrainedY = Math.max(0, Math.min(100, newY));
+          
+          return {
+            ...particle,
+            x: constrainedX,
+            y: constrainedY,
+            vx: particle.vx * 0.94, // Slower deceleration
+            vy: particle.vy * 0.94,
+            opacity: particle.opacity * 0.94, // Slower fade
+            size: particle.size * 0.99, // Slower shrink
+          };
+        }).filter(particle => particle.opacity > 0.08) // Keep particles longer
       );
     };
 
@@ -71,10 +97,21 @@ export function CaptureEffect({ square, playerSide }: CaptureEffectProps) {
       clearInterval(interval);
       clearTimeout(cleanup);
     };
-  }, [centerX, centerY]);
+  }, [centerX, centerY, isMobile]);
 
   return (
-    <div className={`absolute inset-0 ${playerSide === "black" ? "rotate-180" : ""}`}>
+    <div 
+      className={`absolute inset-0 pointer-events-none overflow-hidden ${playerSide === "black" ? "rotate-180" : ""}`}
+      style={{
+        // Ensure particles don't affect layout or create scrollbars
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 10,
+      }}
+    >
       {/* Flash effect on capture square */}
       <div
         className="absolute bg-red-500 opacity-80 animate-ping"
@@ -123,6 +160,7 @@ export function CaptureEffect({ square, playerSide }: CaptureEffectProps) {
               transform: 'translate(-50%, -50%)',
               pointerEvents: 'none',
               boxShadow: `0 0 ${particle.size}px rgba(239, 68, 68, ${particle.opacity * 0.5})`,
+              zIndex: 10,
             }}
           />
         );

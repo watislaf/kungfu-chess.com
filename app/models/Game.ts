@@ -39,6 +39,7 @@ export interface GameState {
   spectators: Spectator[];
   status: 'waiting' | 'settings' | 'playing' | 'finished';
   createdAt: Date;
+  lastActivity: Date; // Track last activity for cleanup purposes
   currentTurn?: string; // player id
   bothPlayersReady: boolean;
   settings?: GameSettings;
@@ -136,6 +137,7 @@ export class Game {
       spectators: [],
       status: 'waiting',
       createdAt: new Date(),
+      lastActivity: new Date(), // Initialize with current time
       bothPlayersReady: false,
       settings: {
         maxMovesPerPeriod: 3,
@@ -223,6 +225,7 @@ export class Game {
         };
         
         this.state.players.push(newPlayer);
+        this.state.lastActivity = new Date(); // Update activity timestamp
         
         // Update status when both players are present - go to settings phase
         if (this.state.players.length === 2) {
@@ -255,6 +258,7 @@ export class Game {
     
     this.state.players = this.state.players.filter(p => p.id !== playerId);
     this.state.spectators = this.state.spectators.filter(s => s.id !== playerId);
+    this.state.lastActivity = new Date(); // Update activity timestamp
     
     // If a player leaves during an active game, end the game with disconnection
     if (wasInActiveGame && player) {
@@ -631,6 +635,7 @@ export class Game {
     this.checkGameEnd();
     // Update check status after the move
     this.updateCheckStatus();
+    this.state.lastActivity = new Date(); // Update activity timestamp for successful moves
     return { success: true, move: { from, to, piece, captured: actualCaptured, attackTarget: undefined } };
   }
 

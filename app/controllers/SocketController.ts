@@ -31,8 +31,9 @@ export class SocketController {
     this.cleanupInterval = setInterval(async () => {
       try {
         await this.gameManager.cleanupMatchmakingQueue();
+        this.gameManager.cleanupAbandonedGames(); // Add cleanup for abandoned games
       } catch (error) {
-        console.error('Error during matchmaking cleanup:', error);
+        console.error('Error during cleanup:', error);
       }
     }, 60000); // Clean up every minute
   }

@@ -2,21 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Trophy, Target, Calendar, TrendingUp, TrendingDown, Minus, Crown, Github, Medal } from "lucide-react";
+import { ArrowLeft, Trophy, Target, Calendar, TrendingUp, TrendingDown, Minus, Crown, Github, Medal, Heart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSocket } from "@/lib/hooks/useSocket";
 import { useAuth } from "@/lib/hooks/useAuth";
-import { useChatPrompt } from "@/lib/hooks/useChatPrompt";
+import { useTipPrompt } from "@/lib/hooks/useTipPrompt";
 import { getTitleColor } from "@/app/models/Player";
-import { ChatModal } from "@/components/ui/ChatModal";
+import { TipModal } from "@/components/ui/TipModal";
 
 export default function GameHistoryPage() {
   const router = useRouter();
   const { socket } = useSocket();
   const auth = useAuth({ socket });
-  const chatPrompt = useChatPrompt();
+  const tipPrompt = useTipPrompt();
 
   const getResultIcon = (result: string) => {
     switch (result) {
@@ -104,11 +104,11 @@ export default function GameHistoryPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={chatPrompt.openPrompt}
+          onClick={tipPrompt.openPrompt}
           className="bg-red-900/20 border-red-900/50 text-red-400 hover:bg-red-900/40 backdrop-blur-sm"
         >
-          <span className="sm:hidden">💝</span>
-          <span className="hidden sm:inline">💝 Support</span>
+          <Heart className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Tip</span>
         </Button>
       </div>
 
@@ -288,9 +288,10 @@ export default function GameHistoryPage() {
         </div>
       )}
 
-      <ChatModal
-        isOpen={chatPrompt.isPromptOpen}
-        onClose={chatPrompt.closePrompt}
+      <TipModal
+        isOpen={tipPrompt.isPromptOpen}
+        onClose={tipPrompt.closePrompt}
+        onTipped={tipPrompt.onUserTipped}
       />
     </div>
   );

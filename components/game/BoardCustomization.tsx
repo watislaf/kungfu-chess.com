@@ -69,6 +69,14 @@ const BOARD_THEMES: BoardTheme[] = [
     lightSquareHover: "hover:from-gray-150 hover:via-gray-250 hover:to-gray-350",
     darkSquareHover: "hover:from-gray-550 hover:via-gray-650 hover:to-gray-750",
   },
+  {
+    id: "neon",
+    name: "Neon",
+    lightSquare: "bg-gradient-to-br from-cyan-50 via-cyan-100 to-cyan-200 border border-cyan-300/50 shadow-sm shadow-cyan-400/20",
+    darkSquare: "bg-gradient-to-br from-pink-600 via-pink-700 to-pink-800 border border-pink-500/50 shadow-sm shadow-pink-400/20",
+    lightSquareHover: "hover:from-cyan-100 hover:via-cyan-150 hover:to-cyan-250 hover:shadow-cyan-400/30",
+    darkSquareHover: "hover:from-pink-550 hover:via-pink-650 hover:to-pink-750 hover:shadow-pink-400/30",
+  },
 ];
 
 const PIECE_THEMES: PieceTheme[] = [
@@ -96,6 +104,11 @@ const PIECE_THEMES: PieceTheme[] = [
     id: "minimalist",
     name: "Minimal",
     description: "Ultra-clean simple forms",
+  },
+  {
+    id: "gothic",
+    name: "Gothic",
+    description: "Dark medieval fantasy style",
   },
 ];
 

@@ -8,12 +8,12 @@ interface AttackIndicatorLineProps {
   playerSide: "white" | "black";
 }
 
-export const AttackIndicatorLine: React.FC<AttackIndicatorLineProps> = ({
+const AttackIndicatorLine: React.FC<AttackIndicatorLineProps> = ({
   from,
   to,
   playerSide,
 }) => {
-  // Convert square notation to grid coordinates (same as MoveIndicator)
+  // Convert square notation to grid coordinates
   const getCoords = (square: SquareType) => {
     const file = square.charCodeAt(0) - 97; // a=0, b=1, etc.
     const rank = 8 - parseInt(square[1]); // 8=0, 7=1, etc.
@@ -23,20 +23,30 @@ export const AttackIndicatorLine: React.FC<AttackIndicatorLineProps> = ({
   const fromCoords = getCoords(from);
   const toCoords = getCoords(to);
 
-  // Calculate position as percentages (each square is 12.5% of the board)
-  const fromX = (fromCoords.x + 0.5) * 12.5; // Center of square
+  // Calculate percentages for positioning
+  const fromX = (fromCoords.x + 0.5) * 12.5;
   const fromY = (fromCoords.y + 0.5) * 12.5;
   const toX = (toCoords.x + 0.5) * 12.5;
   const toY = (toCoords.y + 0.5) * 12.5;
 
-  // Calculate arrow direction
   const dx = toX - fromX;
   const dy = toY - fromY;
   const length = Math.sqrt(dx * dx + dy * dy);
   const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-30">
+    <div 
+      className="absolute inset-0 pointer-events-none overflow-hidden"
+      style={{
+        // Ensure effects don't affect layout or create scrollbars
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 30,
+      }}
+    >
       {/* Main attack line */}
       <div
         className="absolute bg-yellow-400 opacity-90 animate-pulse shadow-lg"
@@ -90,4 +100,6 @@ export const AttackIndicatorLine: React.FC<AttackIndicatorLineProps> = ({
       `}</style>
     </div>
   );
-}; 
+};
+
+export { AttackIndicatorLine }; 

@@ -120,7 +120,7 @@ export default function HomePage() {
 
   const openGitHubRepo = () => {
     // Open GitHub repository (replace with actual repo URL when available)
-    window.open('https://github.com/your-username/rapid-chess-online', '_blank');
+    window.open("https://github.com/watislaf/kungfu-chess.com", "_blank");
   };
 
   return (

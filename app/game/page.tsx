@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { LogOut, Eye, Github, LogIn } from "lucide-react";
+import { LogOut, Eye, Github, LogIn, Heart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,10 +12,10 @@ import { SpectatorInfo } from "@/components/game/SpectatorInfo";
 import { WaitingRoom } from "@/components/game/WaitingRoom";
 import { GameSettings } from "@/components/game/GameSettings";
 import { GameStarted } from "@/components/game/GameStarted";
-import { ChatModal } from "@/components/ui/ChatModal";
+import { TipModal } from "@/components/ui/TipModal";
 import { useSocket } from "@/lib/hooks/useSocket";
 import { useAuth } from "@/lib/hooks/useAuth";
-import { useChatPrompt } from "@/lib/hooks/useChatPrompt";
+import { useTipPrompt } from "@/lib/hooks/useTipPrompt";
 import { GameSettings as GameSettingsType } from "@/app/models/Game";
 import { Square } from "chess.js";
 
@@ -28,8 +28,6 @@ function GamePageContent() {
   const [hashGameId, setHashGameId] = useState<string | null>(null);
   const [pendingMoves, setPendingMoves] = useState<Map<string, string>>(new Map()); // moveKey -> moveId
   const [lastGameStatus, setLastGameStatus] = useState<string | null>(null);
-
-  const chatPrompt = useChatPrompt();
 
   const {
     isConnected,
@@ -54,6 +52,8 @@ function GamePageContent() {
   } = useSocket();
 
   const auth = useAuth({ socket });
+
+  const tipPrompt = useTipPrompt();
 
   useEffect(() => {
     // Extract game ID from URL hash for backward compatibility
@@ -236,11 +236,11 @@ function GamePageContent() {
           <Button
             variant="outline"
             size="sm"
-            onClick={chatPrompt.openPrompt}
+            onClick={tipPrompt.openPrompt}
             className="bg-red-900/20 border-red-900/50 text-red-400 hover:bg-red-900/40 backdrop-blur-sm"
           >
-            <span className="sm:hidden">💝</span>
-            <span className="hidden sm:inline">💝 Support</span>
+            <Heart className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Tip</span>
           </Button>
         </div>
         {/* Login button for non-authenticated users */}
@@ -461,10 +461,11 @@ function GamePageContent() {
         )}
       </div>
 
-      {/* Chat Modal */}
-      <ChatModal
-        isOpen={chatPrompt.isPromptOpen}
-        onClose={chatPrompt.closePrompt}
+      {/* Tip Modal */}
+      <TipModal
+        isOpen={tipPrompt.isPromptOpen}
+        onClose={tipPrompt.closePrompt}
+        onTipped={tipPrompt.onUserTipped}
       />
     </div>
   );

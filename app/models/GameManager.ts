@@ -135,11 +135,21 @@ export class GameManager {
     if (gameId) {
       const game = this.games.get(gameId);
       if (game) {
+        const gameStateBefore = game.getState();
         game.removePlayer(playerId);
+        const gameStateAfter = game.getState();
         
-        // Remove game if no players left
-        if (game.getPlayerCount() === 0) {
+        // If this was an active game with 2 players and now has 0 players, clean it up immediately
+        if (gameStateBefore.status === 'playing' && 
+            gameStateBefore.players.length === 2 && 
+            gameStateAfter.players.length === 0) {
+          console.log(`🧹 Game ${gameId} abandoned by both players - cleaning up immediately`);
           this.games.delete(gameId);
+        }
+        // Remove game if no players left (for any status)
+        else if (game.getPlayerCount() === 0) {
+          this.games.delete(gameId);
+          console.log(`🧹 Game ${gameId} has no players left - cleaning up`);
         }
       }
       this.playerToGame.delete(playerId);
@@ -290,5 +300,42 @@ export class GameManager {
   async cleanupMatchmakingQueue(): Promise<void> {
     await this.db.cleanupMatchmakingQueue();
     console.log(`🧹 Cleaned up matchmaking queue`);
+  }
+
+  // New method to clean up abandoned games
+  cleanupAbandonedGames(): void {
+    let cleanedCount = 0;
+    const now = new Date();
+    const abandonedTimeThreshold = 5 * 60 * 1000; // 5 minutes
+
+    for (const [gameId, game] of this.games.entries()) {
+      const gameState = game.getState();
+      
+      // Check if game has been abandoned (no players or all players disconnected for too long)
+      const shouldCleanup = 
+        gameState.players.length === 0 ||
+        (gameState.status === 'playing' && 
+         gameState.players.length < 2 && 
+         gameState.lastActivity && 
+         (now.getTime() - new Date(gameState.lastActivity).getTime()) > abandonedTimeThreshold);
+
+      if (shouldCleanup) {
+        // Clean up player mappings for this game
+        for (const [playerId, mappedGameId] of this.playerToGame.entries()) {
+          if (mappedGameId === gameId) {
+            this.playerToGame.delete(playerId);
+          }
+        }
+        
+        // Remove the game
+        this.games.delete(gameId);
+        cleanedCount++;
+        console.log(`🧹 Cleaned up abandoned game: ${gameId}`);
+      }
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`🧹 Cleaned up ${cleanedCount} abandoned games`);
+    }
   }
 } 

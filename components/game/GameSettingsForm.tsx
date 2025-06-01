@@ -13,8 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Settings, Clock, Zap, HelpCircle, Shuffle, Heart } from "lucide-react";
+import { Settings, Clock, Zap, Heart, Shuffle } from "lucide-react";
 import { GameSettings } from "@/app/models/Game";
+import { useTipPrompt } from "@/lib/hooks/useTipPrompt";
+import { TipModal } from "../ui/TipModal";
 
 interface GameSettingsFormProps {
   onSettingsSubmit: (settings: GameSettings) => void;
@@ -39,6 +41,8 @@ export function GameSettingsForm({
   const [enableHitPointsSystem, setEnableHitPointsSystem] = useState(
     currentSettings?.enableHitPointsSystem || false
   );
+
+  const tipPrompt = useTipPrompt();
 
   // Debounced auto-save
   const debouncedSave = useCallback(
@@ -112,43 +116,14 @@ export function GameSettingsForm({
               <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
               <span>Game Settings</span>
             </div>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-5 w-5 p-0">
-                  <HelpCircle className="h-3 w-3" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Game Rules</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-2">
-                  <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• Players can move simultaneously (no turns)</li>
-                    <li>
-                      • Limited to {currentSettings?.maxMovesPerPeriod || 3}{" "}
-                      moves per 10 seconds
-                    </li>
-                    <li>
-                      • Each piece has{" "}
-                      {currentSettings?.pieceCooldownSeconds || 5}s cooldown
-                      after moving
-                    </li>
-                    <li>• Standard chess rules apply for valid moves</li>
-                    {currentSettings?.enableRandomPieceGeneration && (
-                      <li className="text-purple-600">
-                        • Random pieces spawn on empty rook squares every few seconds
-                      </li>
-                    )}
-                    {currentSettings?.enableHitPointsSystem && (
-                      <li className="text-red-600">
-                        • Pieces have 3 hit points - must be attacked 3 times to be captured
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-5 w-5 p-0 bg-red-900/20 border-red-900/50 text-red-400 hover:bg-red-900/40"
+              onClick={tipPrompt.openPrompt}
+            >
+              <Heart className="h-3 w-3" />
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="px-2 sm:px-4 pb-2 sm:pb-3">
@@ -203,39 +178,14 @@ export function GameSettingsForm({
             <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
             <span>Game Settings</span>
           </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-5 w-5 p-0">
-                <HelpCircle className="h-3 w-3" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Game Rules</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-2">
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Players can move simultaneously (no turns)</li>
-                  <li>• Limited to {maxMovesPerPeriod} moves per 10 seconds</li>
-                  <li>
-                    • Each piece has {pieceCooldownSeconds}s cooldown after
-                    moving
-                  </li>
-                  <li>• Standard chess rules apply for valid moves</li>
-                  {enableRandomPieceGeneration && (
-                    <li className="text-purple-600">
-                      • Random pieces spawn on empty rook squares every few seconds
-                    </li>
-                  )}
-                  {enableHitPointsSystem && (
-                    <li className="text-red-600">
-                      • Pieces have 3 hit points - must be attacked 3 times to be captured
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-5 w-5 p-0 bg-red-900/20 border-red-900/50 text-red-400 hover:bg-red-900/40"
+            onClick={tipPrompt.openPrompt}
+          >
+            <Heart className="h-3 w-3" />
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 sm:space-y-3 px-2 sm:px-4 pb-2 sm:pb-3">
@@ -324,6 +274,13 @@ export function GameSettingsForm({
           Settings auto-save as you type
         </p>
       </CardContent>
+      
+      {/* Tip Modal */}
+      <TipModal
+        isOpen={tipPrompt.isPromptOpen}
+        onClose={tipPrompt.closePrompt}
+        onTipped={tipPrompt.onUserTipped}
+      />
     </Card>
   );
 }
