@@ -107,7 +107,7 @@ export function PieceGenerationEffect({ square, playerSide, onComplete }: PieceG
       clearTimeout(cleanup);
       clearTimeout(entranceTimer);
     };
-  }, [centerX, centerY, onComplete, isMobile]);
+  }, [square, onComplete, isMobile]);
 
   return (
     <div 

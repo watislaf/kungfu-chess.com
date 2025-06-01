@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Square as SquareType } from "chess.js";
 import { GameState } from "@/app/models/Game";
 
@@ -137,9 +137,9 @@ export function useGameEffects({ gameState }: UseGameEffectsProps) {
     }
   }, [captureEffect]);
 
-  const handleEffectComplete = (effectId: string) => {
+  const handleEffectComplete = useCallback((effectId: string) => {
     setPieceGenerationEffects(prev => prev.filter(effect => effect.id !== effectId));
-  };
+  }, []);
 
   return {
     lastMoveIndicator,
