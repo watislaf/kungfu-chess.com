@@ -102,40 +102,742 @@ https://github.com/user-attachments/assets/2dcac36f-a8e5-46cd-b907-8773ee9da3c1
 
 ### Prerequisites for Chess Development
 - **Node.js 18+** and npm (for running the chess application)
+  - Check version: `node --version` (should be 18.0.0 or higher)
+  - Check npm: `npm --version`
 - **Git** (for cloning the chess game repository)
+  - Check version: `git --version`
+- **Modern Web Browser** (Chrome, Firefox, Safari, or Edge)
 - **AWS CLI** (optional, for cloud deployment)
+- **Code Editor** (VS Code, WebStorm, or similar)
 
-### Quick Start Guide
-1. **Clone Chess Repository**:
-   ```bash
-   git clone https://github.com/watislaf/kungfu-chess.com.git
-   cd kungfu-chess.com
+### 🚀 Detailed Setup Guide
+
+#### Step 1: Environment Preparation
+First, ensure your development environment is ready:
+
+```bash
+# Check Node.js version (must be 18+)
+node --version
+
+# Check npm version
+npm --version
+
+# If Node.js is outdated, install latest LTS version from https://nodejs.org/
+```
+
+#### Step 2: Clone and Navigate to Project
+```bash
+# Clone the repository
+git clone https://github.com/watislaf/kungfu-chess.com.git
+
+# Navigate to project directory
+cd kungfu-chess.com
+
+# Check project structure
+ls -la
+```
+
+#### Step 3: Install Dependencies
+```bash
+# Install all project dependencies (this may take 2-3 minutes)
+npm install
+
+# Verify installation completed successfully
+npm list --depth=0
+```
+
+#### Step 4: Build the Backend Server
+Before running the development server, you need to build the backend:
+
+```bash
+# Build the TypeScript backend server
+npm run build:server
+```
+
+### 🎮 Running the Application
+
+#### Option 1: Full Development Mode (Recommended)
+Start both frontend and backend servers simultaneously:
+
+```bash
+# Start complete development environment
+npm run dev
+```
+
+This command does the following:
+- Builds the backend server (`npm run build:server`)
+- Starts the Next.js frontend on `http://localhost:3000`
+- Starts the Express.js backend server with Socket.IO support
+- Enables hot reloading for both frontend and backend changes
+- Shows combined logs from both servers
+
+**Expected Output:**
+```
+> concurrently "npm run dev:frontend" "npm run dev:backend"
+
+[0] ▲ Next.js ready on http://localhost:3000
+[1] Backend server running on port 3001
+[1] Socket.IO server initialized
+[1] Database connection established
+```
+
+#### Option 2: Frontend Only Development
+If you only need to work on the frontend:
+
+```bash
+# Start only the Next.js frontend server
+npm run dev:frontend
+```
+
+Access at: `http://localhost:3000`
+
+**Note:** Without the backend, you won't have:
+- Real-time multiplayer functionality
+- User authentication
+- Game state persistence
+- Matchmaking system
+
+#### Option 3: Backend Only Development
+If you only need to work on the backend server:
+
+```bash
+# First build the server
+npm run build:server
+
+# Then start only the backend
+npm run dev:backend
+```
+
+The backend will run on port 3001 with Socket.IO WebSocket support.
+
+#### Option 4: Production Build Testing
+Test the application as it would run in production:
+
+```bash
+# Build for production
+npm run build
+
+# Start production server
+npm start
+```
+
+### 🔧 Development Scripts Reference
+
+| Command | Purpose | When to Use |
+|---------|---------|-------------|
+| `npm run dev` | Start full development environment | Daily development, testing features |
+| `npm run dev:frontend` | Frontend only (port 3000) | UI/UX work, component development |
+| `npm run dev:backend` | Backend only (port 3001) | API development, server logic |
+| `npm run build` | Production build | Before deployment, testing |
+| `npm run build:server` | Build TypeScript backend | After backend changes |
+| `npm run start` | Production server | Testing production build locally |
+| `npm run lint` | Code quality checks | Before committing code |
+| `npm run clean` | Clean build artifacts | Troubleshooting build issues |
+
+### 🎯 First-Time Setup Verification
+
+After starting the application, verify everything works:
+
+1. **Frontend Check**: Visit `http://localhost:3000`
+   - You should see the Kung Fu Chess homepage
+   - Navigation should work (Home, Game, History)
+
+2. **Backend Check**: Look for these console messages:
+   ```
+   Backend server running on port 3001
+   Socket.IO server initialized
+   Database connection established
    ```
 
-2. **Install Chess Dependencies**:
+3. **Test User Registration**:
+   - Click "Register" to create a test account
+   - Try logging in with development accounts (see below)
+
+4. **Test Game Creation**:
+   - Create a new game room
+   - Open a second browser tab/window
+   - Join the same game with a different account
+
+### 🔑 Development Chess Accounts
+
+For local testing, use these pre-configured accounts:
+
+**Primary Test Account:**
+- Username: `tugrza`
+- Password: `password123`
+
+**Secondary Test Account:**
+- Username: `challenger`
+- Password: `password123`
+
+**Testing Multiplayer Games:**
+1. Open two browser windows/tabs
+2. Log in with different accounts in each window
+3. Create a game in one window
+4. Join the game from the other window
+5. Test real-time chess moves
+
+### 🌐 Accessing Your Local Application
+
+Once running, you can access:
+
+- **Main Application**: `http://localhost:3000`
+- **Game Creation**: `http://localhost:3000/game`
+- **Game History**: `http://localhost:3000/history`
+- **Debug Page**: `http://localhost:3000/debug` (development only)
+
+### 📱 Testing on Mobile Devices
+
+To test on mobile devices on your local network:
+
+1. Find your computer's IP address:
    ```bash
-   npm install
+   # On macOS/Linux
+   ifconfig | grep "inet "
+
+   # On Windows
+   ipconfig
    ```
 
-3. **Start Chess Development Server**:
+2. Access from mobile device: `http://YOUR_IP_ADDRESS:3000`
+
+3. Ensure your firewall allows connections on port 3000
+
+### ⚡ Hot Reloading and Development Workflow
+
+The development setup supports hot reloading:
+
+**Frontend Changes (React/Next.js):**
+- Save any file in `app/`, `components/`, or `pages/`
+- Browser automatically refreshes
+- Changes appear immediately
+
+**Backend Changes (Express/Socket.IO):**
+- Save any file in `app/services/`, `app/controllers/`, etc.
+- Server automatically restarts
+- Frontend reconnects to updated backend
+
+**Styling Changes (Tailwind CSS):**
+- Save any component with updated classes
+- Styles update instantly without page refresh
+
+### 🔍 Development Debugging
+
+#### Enable Debug Logging
+Set environment variable for detailed logs:
+
+```bash
+# Linux/macOS
+DEBUG=chess:* npm run dev
+
+# Windows
+set DEBUG=chess:* && npm run dev
+```
+
+#### Common Debug Endpoints
+- `/debug` - Development debugging page
+- Browser DevTools Console - Frontend logs
+- Terminal Output - Backend logs
+
+### 🏗️ Project Structure for Development
+
+Understanding the codebase structure:
+
+```
+kungfu-chess.com/
+├── app/                    # Next.js app directory
+│   ├── controllers/        # Backend route controllers
+│   ├── models/            # Game logic and data models
+│   ├── services/          # Database and external services
+│   ├── utils/             # Utility functions
+│   └── page.tsx           # Frontend pages
+├── components/            # React UI components
+│   └── ui/               # Reusable UI components
+├── terraform/            # AWS infrastructure code
+├── dist/                 # Compiled backend code (auto-generated)
+├── .next/                # Next.js build output (auto-generated)
+└── package.json          # Dependencies and scripts
+```
+
+### 🔄 Typical Development Workflow
+
+1. **Start Development Environment**:
    ```bash
    npm run dev
    ```
-   This starts both frontend (port 3000) and backend servers concurrently.
 
-4. **Open Chess Game**: Navigate to [http://localhost:3000](http://localhost:3000)
+2. **Make Changes**: Edit files in `app/`, `components/`, or other directories
 
-### Available Development Scripts
-- `npm run dev` - Start both frontend and backend in development mode
-- `npm run dev:frontend` - Start only frontend on port 3000
-- `npm run dev:backend` - Start only backend server
-- `npm run build` - Build production bundle for both frontend and backend
-- `npm run lint` - Run ESLint for code quality checks
-- `npm run clean` - Clean build artifacts
+3. **Test Changes**: Check browser and console for updates
 
-**Development Chess Accounts** (for local testing):
-- Username: `tugrza`, Password: `password123`
-- Username: `challenger`, Password: `password123`
+4. **Run Code Quality Checks**:
+   ```bash
+   npm run lint
+   ```
+
+5. **Build and Test Production**:
+   ```bash
+   npm run build
+   npm start
+   ```
+
+This setup provides everything you need for local Kung Fu Chess development!
+
+## 🛠️ Troubleshooting Common Issues
+
+### Installation Problems
+
+#### Node.js Version Issues
+**Problem**: `npm install` fails or shows compatibility errors
+
+**Solution**:
+```bash
+# Check your Node.js version
+node --version
+
+# If version is below 18.0.0, update Node.js
+# Visit https://nodejs.org/ and install the latest LTS version
+
+# Clear npm cache if needed
+npm cache clean --force
+
+# Remove node_modules and package-lock.json, then reinstall
+rm -rf node_modules package-lock.json
+npm install
+```
+
+#### Dependency Installation Failures
+**Problem**: `npm install` hangs or fails with network errors
+
+**Solutions**:
+```bash
+# Try using a different registry
+npm install --registry https://registry.npmjs.org/
+
+# Clear npm cache
+npm cache clean --force
+
+# Use yarn instead of npm (if available)
+yarn install
+
+# Check internet connection and firewall settings
+```
+
+#### Permission Errors (Linux/macOS)
+**Problem**: Permission denied errors during installation
+
+**Solution**:
+```bash
+# Fix npm permissions (don't use sudo with npm)
+mkdir ~/.npm-global
+npm config set prefix '~/.npm-global'
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+
+# Then retry installation
+npm install
+```
+
+### Server Startup Issues
+
+#### Backend Build Failures
+**Problem**: `npm run build:server` fails with TypeScript errors
+
+**Solutions**:
+```bash
+# Check TypeScript configuration
+npx tsc --version
+
+# Clean and rebuild
+npm run clean
+npm run build:server
+
+# If specific TypeScript errors occur, check:
+# - tsconfig.server.json configuration
+# - Missing type definitions
+# - Import/export statement syntax
+```
+
+#### Port Already in Use
+**Problem**: `Error: listen EADDRINUSE :::3000` or similar port errors
+
+**Solutions**:
+```bash
+# Find what's using the port
+lsof -i :3000  # macOS/Linux
+netstat -ano | findstr :3000  # Windows
+
+# Kill the process using the port
+kill -9 <PID>  # macOS/Linux
+taskkill /PID <PID> /F  # Windows
+
+# Or use a different port
+PORT=3001 npm run dev
+```
+
+#### Frontend Won't Start
+**Problem**: Next.js development server fails to start
+
+**Solutions**:
+```bash
+# Clear Next.js cache
+rm -rf .next
+
+# Rebuild everything
+npm run clean
+npm install
+npm run dev
+
+# Check for conflicting packages
+npm ls
+```
+
+### Runtime Issues
+
+#### WebSocket Connection Failures
+**Problem**: "WebSocket connection failed" in browser console
+
+**Solutions**:
+1. **Check Backend Status**: Ensure backend server is running (you should see "Socket.IO server initialized")
+2. **Firewall Issues**: Allow ports 3000 and 3001 through firewall
+3. **Browser Extensions**: Disable ad blockers or privacy extensions temporarily
+4. **Network Configuration**: Check if corporate firewall blocks WebSocket connections
+
+```bash
+# Test WebSocket connection manually
+curl -I http://localhost:3001/socket.io/
+```
+
+#### Game State Not Syncing
+**Problem**: Chess moves don't appear in real-time between players
+
+**Debugging Steps**:
+1. **Check Browser Console**: Look for JavaScript errors
+2. **Check Backend Logs**: Look for Socket.IO connection messages
+3. **Test with Development Accounts**: Use the provided test accounts
+4. **Network Tab**: Check for failed WebSocket messages in browser DevTools
+
+#### Authentication Issues
+**Problem**: Cannot login or register users
+
+**Solutions**:
+1. **Check Backend Database**: Ensure backend server started successfully
+2. **Clear Browser Data**: Clear cookies and localStorage for localhost
+3. **Test with Development Accounts**: Try the pre-configured accounts first
+
+```bash
+# Clear browser storage (in browser console)
+localStorage.clear()
+sessionStorage.clear()
+```
+
+### Performance Issues
+
+#### Slow Application Loading
+**Problem**: Application takes too long to load or respond
+
+**Solutions**:
+```bash
+# Check if running in development mode (expected to be slower)
+npm run build
+npm start  # Test production build performance
+
+# Check system resources
+top  # Linux/macOS
+taskmgr  # Windows
+
+# Optimize development setup
+npm run dev:frontend  # Run only frontend if backend not needed
+```
+
+#### High Memory Usage
+**Problem**: Development server uses too much memory
+
+**Solutions**:
+- Close unused browser tabs
+- Restart development servers periodically
+- Use production build for performance testing
+- Consider running frontend and backend separately
+
+### Environment-Specific Issues
+
+#### Windows-Specific Problems
+**Problem**: Path or script execution issues on Windows
+
+**Solutions**:
+```bash
+# Use PowerShell or Command Prompt as Administrator
+# Install windows-build-tools if needed
+npm install --global windows-build-tools
+
+# For path issues, use cross-env
+npm install --save-dev cross-env
+```
+
+#### macOS-Specific Problems
+**Problem**: Xcode command line tools missing
+
+**Solution**:
+```bash
+# Install Xcode command line tools
+xcode-select --install
+```
+
+#### Linux-Specific Problems
+**Problem**: Missing build dependencies
+
+**Solutions**:
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install build-essential
+
+# CentOS/RHEL
+sudo yum groupinstall "Development Tools"
+```
+
+### Database and Backend Issues
+
+#### AWS Connection Errors
+**Problem**: Cannot connect to AWS services in development
+
+**Note**: The application works in development mode without AWS. AWS is only needed for production deployment.
+
+**For Development**:
+- The app uses in-memory storage for development
+- No AWS configuration required for local testing
+- Focus on frontend functionality and game logic
+
+### Getting Help
+
+If you're still experiencing issues:
+
+1. **Check Console Logs**: Look for specific error messages in:
+   - Terminal where you ran `npm run dev`
+   - Browser Developer Tools Console (F12)
+
+2. **Verify Prerequisites**: Double-check all prerequisites are installed correctly
+
+3. **Clean Installation**: Try a completely fresh installation:
+   ```bash
+   # Remove everything and start over
+   rm -rf node_modules .next dist package-lock.json
+   npm install
+   npm run dev
+   ```
+
+4. **Check System Requirements**:
+   - Ensure 4GB+ RAM available
+   - Ensure 2GB+ free disk space
+   - Check antivirus isn't blocking Node.js processes
+
+5. **Environment Information**: When reporting issues, include:
+   - Operating system and version
+   - Node.js version (`node --version`)
+   - npm version (`npm --version`)
+   - Complete error message from console
+
+## ⚙️ Environment Configuration
+
+### Development Environment Variables
+
+The application works out-of-the-box for local development without additional configuration. However, you can customize behavior using environment variables:
+
+#### Available Environment Variables
+
+Create a `.env.local` file in the project root for custom configuration:
+
+```bash
+# .env.local (optional for development)
+
+# Development server ports (default values shown)
+PORT=3000                    # Frontend Next.js server port
+BACKEND_PORT=3001           # Backend Express server port
+
+# Development mode settings
+NODE_ENV=development        # Environment mode (development/production)
+DEBUG=false                # Enable debug logging
+NEXT_TELEMETRY_DISABLED=1   # Disable Next.js telemetry
+
+# Database settings (development uses in-memory storage)
+USE_LOCAL_DB=true           # Use in-memory database for development
+
+# Socket.IO settings
+SOCKET_CORS_ORIGIN=http://localhost:3000  # CORS origin for WebSocket
+
+# Development features
+ENABLE_DEBUG_PAGE=true      # Enable /debug endpoint
+ENABLE_DEV_ACCOUNTS=true    # Enable pre-configured test accounts
+```
+
+#### Setting Environment Variables
+
+**Option 1: Create .env.local file** (Recommended)
+```bash
+# Create environment file
+touch .env.local
+
+# Edit with your preferred editor
+echo "PORT=3000" >> .env.local
+echo "BACKEND_PORT=3001" >> .env.local
+```
+
+**Option 2: Inline with commands**
+```bash
+# Linux/macOS
+PORT=3005 npm run dev
+
+# Windows PowerShell
+$env:PORT=3005; npm run dev
+
+# Windows Command Prompt
+set PORT=3005 && npm run dev
+```
+
+**Option 3: Export in shell session**
+```bash
+# Linux/macOS
+export PORT=3005
+export BACKEND_PORT=3006
+npm run dev
+
+# Windows PowerShell
+$env:PORT=3005
+$env:BACKEND_PORT=3006
+npm run dev
+```
+
+### Production Environment Configuration
+
+For production deployment (AWS), additional environment variables are required:
+
+```bash
+# Production environment variables (required for AWS deployment)
+NODE_ENV=production
+AWS_REGION=us-east-1
+DYNAMODB_TABLE_PREFIX=kungfu-chess-prod
+SSL_CERTIFICATE_ARN=arn:aws:acm:...
+DOMAIN_NAME=kungfu-chess.com
+```
+
+### Configuration Hierarchy
+
+Environment variables are loaded in this order (later sources override earlier ones):
+
+1. System environment variables
+2. `.env` file (committed to repository - avoid sensitive data)
+3. `.env.local` file (local development only - not committed)
+4. Inline environment variables (highest priority)
+
+### Security Notes
+
+**Important**: Never commit sensitive information to version control!
+
+✅ **Safe for .env files**:
+- Development ports and settings
+- Feature flags
+- Debug settings
+- Local database settings
+
+❌ **Never commit**:
+- AWS credentials
+- API keys
+- Database passwords
+- SSL certificates
+- Production secrets
+
+```bash
+# Add to .gitignore (already configured)
+.env.local
+.env.production
+*.key
+*.pem
+```
+
+### Docker Environment (Optional)
+
+If you prefer using Docker for development:
+
+```dockerfile
+# Dockerfile (create if needed)
+FROM node:18-alpine
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+RUN npm run build
+
+EXPOSE 3000 3001
+CMD ["npm", "run", "dev"]
+```
+
+```yaml
+# docker-compose.yml (create if needed)
+version: '3.8'
+services:
+  kungfu-chess:
+    build: .
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - BACKEND_PORT=3001
+    volumes:
+      - .:/app
+      - /app/node_modules
+```
+
+Run with Docker:
+```bash
+# Build and start with Docker Compose
+docker-compose up --build
+
+# Or with Docker directly
+docker build -t kungfu-chess .
+docker run -p 3000:3000 -p 3001:3001 kungfu-chess
+```
+
+### Environment-Specific Features
+
+#### Development Mode Features
+When `NODE_ENV=development`:
+- In-memory database (no AWS required)
+- Hot reloading enabled
+- Debug endpoints available (`/debug`)
+- Detailed error messages
+- Pre-configured test accounts
+- CORS enabled for localhost
+
+#### Production Mode Features
+When `NODE_ENV=production`:
+- AWS DynamoDB database required
+- Optimized builds and caching
+- Error logging to CloudWatch
+- Security headers enabled
+- CORS restricted to production domain
+- Compressed assets
+
+### Verifying Configuration
+
+Check that your environment is configured correctly:
+
+```bash
+# Check environment variables are loaded
+npm run dev
+
+# In browser console or terminal, you should see:
+# - Port numbers if customized
+# - Environment mode (development/production)
+# - Debug status if enabled
+
+# Test configuration with different ports
+PORT=3005 BACKEND_PORT=3006 npm run dev
+# Then visit http://localhost:3005
+```
 
 ## ☁️ AWS Cloud Deployment
 
