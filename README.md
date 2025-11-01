@@ -45,17 +45,20 @@ https://github.com/user-attachments/assets/2dcac36f-a8e5-46cd-b907-8773ee9da3c1
 ## 🛠️ Technology Stack
 
 ### Frontend Chess Client
-- **Next.js 15** - Modern React framework with server-side rendering for fast chess gameplay
+- **Next.js 15.3.2** - Modern React framework with server-side rendering for fast chess gameplay
+- **React 19.0.0** - Latest React with concurrent features for smooth chess gameplay
 - **TypeScript** - Type-safe chess game development
-- **Tailwind CSS** - Beautiful, responsive chess board design
-- **Socket.IO Client** - Real-time chess move synchronization
-- **Chess.js** - Complete chess rule validation and game logic
+- **Tailwind CSS 3.4.17** - Beautiful, responsive chess board design
+- **Socket.IO Client 4.8.1** - Real-time chess move synchronization
+- **Chess.js 1.0.0-beta.8** - Complete chess rule validation and game logic
+- **Radix UI** - Accessible component primitives for dialogs and UI elements
 
 ### Backend Chess Server
 - **Node.js** - High-performance chess game server
-- **Express.js** - RESTful API for chess game management
-- **Socket.IO** - WebSocket-based real-time chess communication
+- **Express.js 5.1.0** - RESTful API for chess game management
+- **Socket.IO 4.8.1** - WebSocket-based real-time chess communication
 - **AWS DynamoDB** - Scalable NoSQL database for player profiles and chess games
+- **AWS SDK v3** - Modern AWS service integration
 
 ### Cloud Infrastructure
 - **AWS EC2** - Reliable chess game server hosting
@@ -105,8 +108,8 @@ https://github.com/user-attachments/assets/2dcac36f-a8e5-46cd-b907-8773ee9da3c1
 ### Quick Start Guide
 1. **Clone Chess Repository**:
    ```bash
-   git clone https://github.com/yourusername/rapid-chess-online.git
-   cd rapid-chess-online
+   git clone https://github.com/watislaf/kungfu-chess.com.git
+   cd kungfu-chess.com
    ```
 
 2. **Install Chess Dependencies**:
@@ -118,8 +121,17 @@ https://github.com/user-attachments/assets/2dcac36f-a8e5-46cd-b907-8773ee9da3c1
    ```bash
    npm run dev
    ```
+   This starts both frontend (port 3000) and backend servers concurrently.
 
 4. **Open Chess Game**: Navigate to [http://localhost:3000](http://localhost:3000)
+
+### Available Development Scripts
+- `npm run dev` - Start both frontend and backend in development mode
+- `npm run dev:frontend` - Start only frontend on port 3000
+- `npm run dev:backend` - Start only backend server
+- `npm run build` - Build production bundle for both frontend and backend
+- `npm run lint` - Run ESLint for code quality checks
+- `npm run clean` - Clean build artifacts
 
 **Development Chess Accounts** (for local testing):
 - Username: `tugrza`, Password: `password123`
@@ -137,11 +149,11 @@ https://github.com/user-attachments/assets/2dcac36f-a8e5-46cd-b907-8773ee9da3c1
 
 2. **Edit Chess Server Configuration**:
    ```hcl
-   project_name = "rapid-chess-online"
+   project_name = "kungfu-chess"
    environment = "production"
    aws_region = "us-east-1"
    instance_type = "t3.micro"
-   domain_name = "your-chess-domain.com"
+   domain_name = "kungfu-chess.com"
    ssl_certificate_arn = "your-ssl-cert-arn"
    ```
 
@@ -180,7 +192,7 @@ This chess game is open source and available under the MIT License. Feel free to
 ## 🔗 Chess Game Links
 
 - **Play Chess Now**: [https://kungfu-chess.com](https://kungfu-chess.com)
-- **GitHub Repository**: [Source Code](https://github.com/yourusername/rapid-chess-online)
+- **GitHub Repository**: [Source Code](https://github.com/watislaf/kungfu-chess.com)
 - **Documentation**: Comprehensive setup and deployment guides
 - **Support**: Community-driven chess game support and feature requests
 
