@@ -6,7 +6,7 @@ import { Toaster } from "sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Kung Fu Chess Online - Real-Time Multiplayer Chess Game | Play Chess Simultaneously",
+  title: "Kung Fu Chess - 2025 Edition",
   description: "Experience revolutionary simultaneous chess gameplay where both players move at the same time! Play real-time multiplayer chess online with ELO rankings, instant matchmaking, and competitive chess battles. No turns, just pure chess strategy at lightning speed.",
   keywords: [
     "kung fu chess",

@@ -1,0 +1,203 @@
+# GitHub Issue Workflow for Issue #22
+## ⭐ IMPORTANT: This Issue Came from Slack
+- The user is working in Slack, not GitHub directly
+- Your GitHub comments will automatically appear in their Slack thread
+- They'll see your questions and responses in Slack in real-time
+- Keep your communication friendly and conversational
+- When you ask questions, they'll reply in Slack (which posts to GitHub)
+- You're having a conversation, not just filing a ticket!
+
+# Project Context
+
+Repository: watislaf/kungfu-chess.com
+
+## Detected Project Structure
+
+- Type: web-application
+- Language: JavaScript/TypeScript
+- Framework: Next.js
+
+## File Structure
+
+```
+📄 README.md
+📂 app/
+  📂 controllers/
+    📄 SocketController.ts
+  📂 debug/
+    📄 page.tsx
+  📄 favicon.ico
+  📂 game/
+    📄 page.tsx
+  📄 globals.css
+  📂 history/
+    📄 page.tsx
+  📄 layout.tsx
+  📂 models/
+    📄 Game.ts
+    📄 GameManager.ts
+    📄 Player.ts
+  📄 not-found.tsx
+  📄 page.tsx
+  📂 services/
+    📄 AuthService.ts
+    📄 DatabaseAdapter.ts
+    📄 DynamoDBService.ts
+  📂 utils/
+    📄 LegacyGameManager.ts
+    📄 debugLogger.ts
+    📄 deepCompare.ts
+📂 components/
+  📂 auth/
+    📄 LoginModal.tsx
+    📄 PlayerProfile.tsx
+  📂 game/
+    📄 AttackIndicator.tsx
+    📄 AttackIndicatorLine.tsx
+    📄 BoardCustomization.tsx
+    📄 BoardOverlays.tsx
+    📄 BulletCounter.tsx
+    📄 CaptureEffect.tsx
+    📄 ChessBoard.tsx
+    📄 ConnectionStatus.tsx
+    📄 CooldownOverlay.tsx
+    📄 EndGame.tsx
+    📄 ExitGameButton.tsx
+    📄 GameSettings.tsx
+    📄 GameSettingsAndSides.tsx
+    📄 GameSettingsForm.tsx
+    📄 GameStarted.tsx
+    📄 GameStatus.tsx
+    📄 MoveIndicator.tsx
+    📄 PawnPromotion.tsx
+    📄 PieceGenerationEffect.tsx
+    📄 PieceGenerationTimer.tsx
+    📄 PieceSVG.tsx
+    📄 PlayerList.tsx
+    📄 QRCodeDisplay.tsx
+    📄 ReadyButton.tsx
+    📄 SettingsDisplay.tsx
+    📄 SettingsInputs.tsx
+    📄 ShareGame.tsx
+    📄 SideSelection.tsx
+    📄 SpectatorInfo.tsx
+    📄 Square.tsx
+    📄 WaitingRoom.tsx
+  📂 ui/
+    📄 ChatModal.tsx
+    📄 TipModal.tsx
+    📄 badge.tsx
+    📄 button.tsx
+    📄 card.tsx
+    📄 dialog.tsx
+    📄 input.tsx
+    📄 label.tsx
+    📄 tabs.tsx
+📄 components.json
+📄 deploy.sh
+📄 destroy.sh
+📄 kill-ports.sh
+📂 lib/
+  📂 hooks/
+    📄 useAuth.ts
+    📄 useBoardCustomization.ts
+    📄 useChatPrompt.ts
+    📄 useChessBoardState.ts
+    📄 useGameEffects.ts
+    📄 useGameSettings.ts
+    📄 useSocket.ts
+    📄 useTipPrompt.ts
+  📂 utils/
+    📄 chessUtils.ts
+  📄 utils.ts
+📄 next.config.ts
+📄 package-lock.json
+📄 package.json
+📄 pnpm-lock.yaml
+📄 postcss.config.mjs
+📂 public/
+  📄 favicon.svg
+  📄 file.svg
+  📄 globe.svg
+  📄 next.svg
+  📄 window.svg
+📄 server.ts
+📄 tailwind.config.js
+📂 terraform/
+  📄 README.md
+  📄 main.tf
+  📄 outputs.tf
+  📄 terraform.tfvars.example
+  📄 user_data.sh
+  📄 variables.tf
+  📄 verify-deployment.sh
+📄 test-https.sh
+📄 tsconfig.json
+📄 tsconfig.server.json
+
+```
+
+
+
+## Issue Classification
+Our system detected this issue as likely a **feature** (confidence: 100%).
+Suggested approach: Clarify requirements, design solution, implement with tests
+
+
+
+## Setup Phase
+1. Fetch latest branches: `git fetch origin`
+2. Get issue details: `gh issue view 22 --json title -q .title`
+
+## Analysis Phase
+1. Read the full issue content and ALL comments: `gh issue view 22 --comments`
+2. Determine the issue type:
+   - **Question/Discussion**: Asking a question or requesting information (no code changes)
+   - **Implementation**: Requires code changes, bug fixes, or new features
+
+3. For QUESTIONS/DISCUSSIONS:
+   - IMPORTANT: User is likely NOT a developer. Explain in plain language
+   - Focus on concepts, reasoning, and user-friendly explanations
+   - Avoid technical jargon
+   - Post helpful answer as comment on issue #22
+   - Ask follow-up questions if needed
+   - NEVER close the issue
+   - DO NOT create PR or make code changes
+   - Exit successfully
+
+4. For IMPLEMENTATION tasks:
+   - IMPORTANT: User is likely NOT a developer
+   - ALMOST ALWAYS ask for clarifications (skip only for simple copy changes)
+   - Use plain language, avoid technical terms
+   - Ask about WHAT they want, not HOW to implement
+   - Post questions as comment on issue #22
+   - Wait for user response before implementing
+
+## Implementation Phase (ONLY for implementation, NOT questions)
+1. Execute the plan step by step
+2. Write tests before implementation
+3. Ensure consistency with existing code
+4. CRITICAL: Commit after EVERY file edit:
+   `git add -A && git commit -m "chore(issue-22): [description]"`
+5. DO NOT leave uncommitted changes
+6. Post summary comment (3-8 lines, plain language, no code)
+7. DO NOT push, create PRs, or close issue - system handles this
+
+## Important Notes
+- COMMIT EVERYTHING: Work may be interrupted. Uncommitted = LOST
+- Use `gh` CLI for GitHub operations
+- Remember: Users are NOT technical (plain language)
+- Keep summaries SHORT (3-8 lines max)
+- NO emojis or emoticons
+- DO NOT paste large outputs
+- .dactyl/ folder is READ ONLY (auto-managed)
+
+## Final Checklist
+For IMPLEMENTATION:
+- [ ] All changes committed (`git status` to verify)
+- [ ] Summary comment posted
+- [ ] Issue LEFT OPEN
+
+For QUESTIONS:
+- [ ] Answer posted as comment
+- [ ] Issue LEFT OPEN
