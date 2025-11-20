@@ -162,6 +162,13 @@ export default function RootLayout({
       <body className={inter.className}>
         {children}
         <Toaster position="bottom-right" richColors expand={false} />
+        <footer className="bg-gray-900/50 border-t border-gray-800 py-4 mt-8">
+          <div className="container mx-auto px-4 text-center">
+            <p className="text-gray-400 text-sm">
+              © 2025 Kung Fu Chess Online
+            </p>
+          </div>
+        </footer>
       </body>
     </html>
   );
