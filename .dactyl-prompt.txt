@@ -1,0 +1,351 @@
+# GitHub Issue Workflow for Issue #36
+## ⭐ IMPORTANT: This Issue Came from Slack
+- The user is working in Slack, not GitHub directly
+- Your GitHub comments will automatically appear in their Slack thread
+- They'll see your questions and responses in Slack in real-time
+- Keep your communication friendly and conversational
+- When you ask questions, they'll reply in Slack (which posts to GitHub)
+- You're having a conversation, not just filing a ticket!
+
+
+# Project Context
+
+Repository: watislaf/kungfu-chess.com
+
+## Past Solutions (Relevant to Issue)
+
+### issue-34
+# Issue #34: Successfully resolved issue #34
+
+**Resolved:** 2025-11-21 12:02:22  
+**Files Changed:** 1
+
+---
+
+## 📋 Summary
+
+chore: ignore .dactyl folder
+
+---
+
+## 📁 Files Modified
+
+- `.gitignore`
+
+---
+
+## 🛠️ Technical Details
+
+**Frameworks:** N/A  
+**Patterns:** N/A  
+**File Types:** gitignore (1)
+
+---
+
+## 💡 Key Learnings
+
+- 🐛 Bug Fix: Fixed issue in .gitignore
+- 📝 Single-file change (focused fix)
+
+---
+
+## 🔄 Reusability
+
+This solution demonstrates:
+- How to handle similar issues in this codebase
+- Common patterns used in this project
+- Best practices for this type of change
+
+**Similar Issues:** Look for issues with similar file patterns or technical requirements.
+
+---
+
+## 📊 Impact
+
+- **Scope:** Minimal (1 file)
+- **Complexity:** Low
+- **Risk:** Low
+
+---
+
+*This knowledge is used by the AI to improve future solutions.*
+
+
+### issue-32
+# Issue #32: Successfully resolved issue #32
+
+**Resolved:** 2025-11-21 11:37:33  
+**Files Changed:** 2
+
+---
+
+## 📋 Summary
+
+chore(issue-32): add subtle box-shadow to login card
+
+---
+
+## 📁 Files Modified
+
+- `.dactyl-prompt.txt`
+- `app/page.tsx`
+
+---
+
+## 🛠️ Technical Details
+
+**Frameworks:** Tailwind CSS  
+**Patterns:** React Hooks  
+**File Types:** tsx (1)
+
+---
+
+## 💡 Key Learnings
+
+- 🐛 Bug Fix: Fixed issue in .dactyl-prompt.txt, page.tsx
+- 🛠️ Technologies Used: Tailwind CSS
+- 📐 Patterns Applied: React Hooks
+
+---
+
+## 🔄 Reusability
+
+This solution demonstrates:
+- How to handle similar issues in this codebase
+- Common patterns used in this project
+- Best practices for this type of change
+
+**Similar Issues:** Look for issues with similar file patterns or technical requirements.
+
+---
+
+## 📊 Impact
+
+- **Scope:** Small (2-3 files)
+- **Complexity:** Medium
+- **Risk:** Low-Medium
+
+---
+
+*This knowledge is used by the AI to improve future solutions.*
+
+
+## Detected Project Structure
+
+- Type: web-application
+- Language: JavaScript/TypeScript
+- Framework: Next.js
+
+## File Structure
+
+```
+📄 README.md
+📂 app/
+  📂 controllers/
+    📄 SocketController.ts
+  📂 debug/
+    📄 page.tsx
+  📄 favicon.ico
+  📂 game/
+    📄 page.tsx
+  📄 globals.css
+  📂 history/
+    📄 page.tsx
+  📄 layout.tsx
+  📂 models/
+    📄 Game.ts
+    📄 GameManager.ts
+    📄 Player.ts
+  📄 not-found.tsx
+  📄 page.tsx
+  📂 services/
+    📄 AuthService.ts
+    📄 DatabaseAdapter.ts
+    📄 DynamoDBService.ts
+  📂 utils/
+    📄 LegacyGameManager.ts
+    📄 debugLogger.ts
+    📄 deepCompare.ts
+📂 components/
+  📂 auth/
+    📄 LoginModal.tsx
+    📄 PlayerProfile.tsx
+  📂 game/
+    📄 AttackIndicator.tsx
+    📄 AttackIndicatorLine.tsx
+    📄 BoardCustomization.tsx
+    📄 BoardOverlays.tsx
+    📄 BulletCounter.tsx
+    📄 CaptureEffect.tsx
+    📄 ChessBoard.tsx
+    📄 ConnectionStatus.tsx
+    📄 CooldownOverlay.tsx
+    📄 EndGame.tsx
+    📄 ExitGameButton.tsx
+    📄 GameSettings.tsx
+    📄 GameSettingsAndSides.tsx
+    📄 GameSettingsForm.tsx
+    📄 GameStarted.tsx
+    📄 GameStatus.tsx
+    📄 MoveIndicator.tsx
+    📄 PawnPromotion.tsx
+    📄 PieceGenerationEffect.tsx
+    📄 PieceGenerationTimer.tsx
+    📄 PieceSVG.tsx
+    📄 PlayerList.tsx
+    📄 QRCodeDisplay.tsx
+    📄 ReadyButton.tsx
+    📄 SettingsDisplay.tsx
+    📄 SettingsInputs.tsx
+    📄 ShareGame.tsx
+    📄 SideSelection.tsx
+    📄 SpectatorInfo.tsx
+    📄 Square.tsx
+    📄 WaitingRoom.tsx
+  📂 ui/
+    📄 ChatModal.tsx
+    📄 TipModal.tsx
+    📄 badge.tsx
+    📄 button.tsx
+    📄 card.tsx
+    📄 dialog.tsx
+    📄 input.tsx
+    📄 label.tsx
+    📄 tabs.tsx
+📄 components.json
+📄 deploy.sh
+📄 destroy.sh
+📄 kill-ports.sh
+📂 lib/
+  📂 hooks/
+    📄 useAuth.ts
+    📄 useBoardCustomization.ts
+    📄 useChatPrompt.ts
+    📄 useChessBoardState.ts
+    📄 useGameEffects.ts
+    📄 useGameSettings.ts
+    📄 useSocket.ts
+    📄 useTipPrompt.ts
+  📂 utils/
+    📄 chessUtils.ts
+  📄 utils.ts
+📄 next.config.ts
+📄 package-lock.json
+📄 package.json
+📄 pnpm-lock.yaml
+📄 postcss.config.mjs
+📂 public/
+  📄 favicon.svg
+  📄 file.svg
+  📄 globe.svg
+  📄 next.svg
+  📄 window.svg
+📄 server.ts
+📄 tailwind.config.js
+📂 terraform/
+  📄 README.md
+  📄 main.tf
+  📄 outputs.tf
+  📄 terraform.tfvars.example
+  📄 user_data.sh
+  📄 variables.tf
+  📄 verify-deployment.sh
+📄 test-https.sh
+📄 tsconfig.json
+📄 tsconfig.server.json
+
+```
+
+
+
+## Issue Classification
+Our system detected this issue as likely a **feature** (confidence: 100%).
+Suggested approach: Clarify requirements, design solution, implement with tests
+
+
+
+## Setup Phase
+1. Fetch latest branches: `git fetch origin`
+2. Get issue details: `gh issue view 36 --json title -q .title`
+
+## Analysis Phase
+1. Read the full issue content and ALL comments: `gh issue view 36 --comments`
+2. Determine the issue type:
+   - **Question/Discussion**: Asking a question or requesting information (no code changes)
+   - **Implementation**: Requires code changes, bug fixes, or new features
+
+3. For QUESTIONS/DISCUSSIONS:
+   - IMPORTANT: User is likely NOT a developer. Explain in plain language
+   - Focus on concepts, reasoning, and user-friendly explanations
+   - Avoid technical jargon
+   - Post helpful answer as comment on issue #36
+   - Ask follow-up questions if needed
+   - NEVER close the issue
+   - DO NOT create PR or make code changes
+   - Exit successfully
+
+4. For IMPLEMENTATION tasks:
+   - IMPORTANT: User is likely NOT a developer
+   - ALMOST ALWAYS ask for clarifications (skip only for simple copy changes)
+   - Use plain language, avoid technical terms
+   - Ask about WHAT they want, not HOW to implement
+   
+   **If you need clarification:**
+   - Post your questions as a comment on issue #36
+   - DO NOT make any code changes yet
+   - DO NOT proceed to Implementation Phase
+   - Exit successfully (system will re-trigger when user responds)
+   
+   **If the task is clear and straightforward:**
+   - Proceed directly to Implementation Phase
+   - You can ask follow-up questions while implementing if needed
+
+## Implementation Phase (ONLY when task is clear)
+**IMPORTANT:** Only proceed here if:
+- You understand exactly what the user wants, OR
+- The task is simple and obvious, OR
+- You've already asked questions in a previous conversation
+
+**If you just asked questions above, EXIT NOW. Do not implement yet.**
+
+1. Execute the plan step by step
+2. Write tests before implementation (if applicable)
+3. Ensure consistency with existing code
+4. CRITICAL: Commit after EVERY file edit:
+   `git add -A && git commit -m "chore(issue-36): [description]"`
+5. DO NOT leave uncommitted changes
+6. DO NOT commit housekeeping changes (like .gitignore) unless that's the issue
+7. Post summary comment (3-8 lines, plain language, no code)
+8. DO NOT push, create PRs, or close issue - system handles this
+
+## Important Notes
+- COMMIT EVERYTHING: Work may be interrupted. Uncommitted = LOST
+- Use `gh` CLI for GitHub operations
+- Remember: Users are NOT technical (plain language)
+- Keep summaries SHORT (3-8 lines max)
+- NO emojis or emoticons
+- DO NOT paste large outputs
+
+## Files That Should NEVER Be Committed:
+- `.dactyl/` folder (project knowledge/memory - auto-managed)
+- `.dactyl-prompt.txt` (your current instructions - temporary)
+- Any files starting with `.dactyl` prefix
+These are AI infrastructure files and MUST stay in .gitignore!
+
+## Final Checklist
+For IMPLEMENTATION (when you made code changes):
+- [ ] All changes committed (`git status` to verify)
+- [ ] Changes actually address the issue (not just housekeeping)
+- [ ] Summary comment posted
+- [ ] Issue LEFT OPEN
+
+For QUESTIONS/CLARIFICATIONS (when you need more info):
+- [ ] Questions posted as comment
+- [ ] NO code changes made
+- [ ] NO commits made
+- [ ] Issue LEFT OPEN
+- [ ] Exited successfully (system will re-trigger on user reply)
+
+For DISCUSSION ANSWERS (explaining how things work):
+- [ ] Answer posted as comment
+- [ ] Issue LEFT OPEN
