@@ -170,7 +170,7 @@ export default function HomePage() {
         </div>
 
         {/* Main Content Grid - User Profile and Game Actions on Same Level */}
-        <div className="grid lg:grid-cols-2 gap-8 mb-8">
+        <div className="grid lg:grid-cols-2 gap-8 mb-8 max-w-6xl mx-auto">
           {/* Game Actions */}
           <Card className="bg-gray-800/50 border-gray-700">
             <CardHeader>
@@ -286,9 +286,9 @@ export default function HomePage() {
             </CardContent>
           </Card>
           {/* Authentication Section */}
-          <div className="flex justify-center">
+          <div className="flex justify-center items-start">
             {auth.isAuthenticated && auth.player ? (
-              <Card className="bg-gray-800/50 border-gray-700 w-full">
+              <Card className="bg-gray-800/50 border-gray-700 w-full max-w-md">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -342,7 +342,7 @@ export default function HomePage() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-gray-800/50 border-gray-700 w-full">
+              <Card className="bg-gray-800/50 border-gray-700 w-full max-w-md">
                 <CardContent className="p-6">
                   <div className="text-center space-y-4">
                     <div>
