@@ -48,3 +48,6 @@ terraform.tfvars
 *.tfplan.json
 .terraformrc
 terraform.rc
+
+# Dactyl AI context (auto-managed)
+.dactyl/
