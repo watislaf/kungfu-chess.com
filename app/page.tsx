@@ -288,7 +288,7 @@ export default function HomePage() {
           {/* Authentication Section */}
           <div className="flex justify-center items-start">
             {auth.isAuthenticated && auth.player ? (
-              <Card className="bg-gray-800/50 border-gray-700 w-full max-w-md">
+              <Card className="bg-gray-800/50 border-gray-700 w-full max-w-md shadow-lg">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -342,7 +342,7 @@ export default function HomePage() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-gray-800/50 border-gray-700 w-full max-w-md">
+              <Card className="bg-gray-800/50 border-gray-700 w-full max-w-md shadow-lg">
                 <CardContent className="p-6">
                   <div className="text-center space-y-4">
                     <div>

@@ -17,34 +17,36 @@ Repository: watislaf/kungfu-chess.com
 ### issue-32
 # Issue #32: Successfully resolved issue #32
 
-**Resolved:** 2025-11-21 07:57:00  
+**Resolved:** 2025-11-21 08:03:14  
 **Files Changed:** 1
 
 ---
 
 ## 📋 Summary
 
-chore: ignore .dactyl folder
+fix(issue-32): center login card on mobile screens
 
 ---
 
 ## 📁 Files Modified
 
-- `.gitignore`
+- `app/page.tsx`
 
 ---
 
 ## 🛠️ Technical Details
 
-**Frameworks:** N/A  
-**Patterns:** N/A  
-**File Types:** gitignore (1)
+**Frameworks:** Tailwind CSS  
+**Patterns:** React Hooks  
+**File Types:** tsx (1)
 
 ---
 
 ## 💡 Key Learnings
 
-- 🐛 Bug Fix: Fixed issue in .gitignore
+- 🐛 Bug Fix: Fixed issue in page.tsx
+- 🛠️ Technologies Used: Tailwind CSS
+- 📐 Patterns Applied: React Hooks
 - 📝 Single-file change (focused fix)
 
 ---
@@ -63,8 +65,8 @@ This solution demonstrates:
 ## 📊 Impact
 
 - **Scope:** Minimal (1 file)
-- **Complexity:** Low
-- **Risk:** Low
+- **Complexity:** Medium
+- **Risk:** Low-Medium
 
 ---
 
