@@ -13,6 +13,7 @@ import { useTipPrompt } from "@/lib/hooks/useTipPrompt";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { PlayerProfile } from "@/components/auth/PlayerProfile";
 import { TipModal } from "@/components/ui/TipModal";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { getTitleColor } from "@/app/models/Player";
 import { getPlayerTitle } from "@/app/models/Player";
 
@@ -134,8 +135,9 @@ export default function HomePage() {
               Kung Fu Chess Online
             </h1>
             <Crown className="h-12 w-12 text-yellow-500" />
-            {/* GitHub / Tip Button */}
+            {/* GitHub / Tip / Theme Toggle Buttons */}
             <div className="absolute top-4 right-4 flex gap-2">
+              <ThemeToggle />
               <Button
                 variant="outline"
                 size="sm"
