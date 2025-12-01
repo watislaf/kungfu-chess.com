@@ -105,8 +105,8 @@ https://github.com/user-attachments/assets/2dcac36f-a8e5-46cd-b907-8773ee9da3c1
 ### Quick Start Guide
 1. **Clone Chess Repository**:
    ```bash
-   git clone https://github.com/yourusername/rapid-chess-online.git
-   cd rapid-chess-online
+   git clone https://github.com/watislaf/kungfu-chess.com.git
+   cd kungfu-chess.com
    ```
 
 2. **Install Chess Dependencies**:
@@ -180,7 +180,7 @@ This chess game is open source and available under the MIT License. Feel free to
 ## 🔗 Chess Game Links
 
 - **Play Chess Now**: [https://kungfu-chess.com](https://kungfu-chess.com)
-- **GitHub Repository**: [Source Code](https://github.com/yourusername/rapid-chess-online)
+- **GitHub Repository**: [Source Code](https://github.com/watislaf/kungfu-chess.com)
 - **Documentation**: Comprehensive setup and deployment guides
 - **Support**: Community-driven chess game support and feature requests
 
