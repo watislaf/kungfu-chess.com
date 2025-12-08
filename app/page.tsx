@@ -124,7 +124,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-pink-900 to-slate-900">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-12">
@@ -292,7 +292,7 @@ export default function HomePage() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center text-white font-bold">
                         {auth.player.displayName.charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -332,7 +332,7 @@ export default function HomePage() {
                         variant="outline"
                         size="sm"
                         onClick={() => (window.location.href = "/history")}
-                        className="bg-purple-900/20 border-purple-900/50 text-purple-400 hover:bg-purple-900/40"
+                        className="bg-pink-900/20 border-pink-900/50 text-pink-400 hover:bg-pink-900/40"
                       >
                         <Trophy className="h-4 w-4 mr-1" />
                         History
@@ -407,7 +407,7 @@ export default function HomePage() {
                       </div>
                       <Badge
                         variant="outline"
-                        className="bg-purple-900/20 border-purple-900/50 text-purple-400 text-xs"
+                        className="bg-pink-900/20 border-pink-900/50 text-pink-400 text-xs"
                       >
                         In Game
                       </Badge>
@@ -447,7 +447,7 @@ export default function HomePage() {
                   <div className="text-xs text-gray-400">Players Online</div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-2xl font-bold text-purple-400">
+                  <div className="text-2xl font-bold text-pink-400">
                     {globalStats.queueSize}
                   </div>
                   <div className="text-xs text-gray-400">In Queue</div>
@@ -496,7 +496,7 @@ export default function HomePage() {
                 <div className="flex items-start gap-3">
                   <Badge
                     variant="outline"
-                    className="bg-purple-900/20 border-purple-900/50 text-purple-400"
+                    className="bg-pink-900/20 border-pink-900/50 text-pink-400"
                   >
                     ⚡
                   </Badge>
@@ -549,10 +549,10 @@ export default function HomePage() {
               </div>
 
               {auth.isAuthenticated && (
-                <div className="mt-6 p-4 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg border border-blue-900/30">
+                <div className="mt-6 p-4 bg-gradient-to-r from-pink-900/20 to-pink-900/20 rounded-lg border border-pink-900/30">
                   <div className="flex items-center gap-2 mb-2">
                     <Crown className="h-4 w-4 text-yellow-500" />
-                    <span className="text-sm font-medium text-blue-300">
+                    <span className="text-sm font-medium text-pink-300">
                       Ranked Player Benefits
                     </span>
                   </div>
